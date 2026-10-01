@@ -1,0 +1,2459 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>第 1 課 · LLM API 基本功</title>
+<!--SHARED-CSS:START-->
+<style>
+/* 課程共用樣式 —— 各課的 HTML 都連到這一份 */
+/* ============ 設計 token ============ */
+:root{
+  --bg:#fbfaf7; --bg-2:#f3f1ec; --bg-3:#e9e6df;
+  --fg:#1c1a17; --fg-2:#4a463f; --fg-3:#7a7468;
+  --line:#ded9d0; --line-2:#c9c3b8;
+  --accent:#0f6d63; --accent-2:#0a544c; --accent-bg:#e4f1ef;
+  --warn:#9a5b00; --warn-bg:#fdf1de; --warn-line:#e8c38a;
+  --danger:#a52b25; --danger-bg:#fdeceb; --danger-line:#eab5b2;
+  --ok:#2d6a2f; --ok-bg:#e9f3e7; --ok-line:#b2d3ae;
+  --code-bg:#f5f3ee; --code-line:#e2ded5;
+  --t-kw:#8a2f7b; --t-str:#1f6b3a; --t-com:#8d8678; --t-num:#9a5b00;
+  --t-fn:#1f5fa8; --t-bi:#0f6d63; --t-op:#5a5448; --t-dec:#9a5b00;
+  --mark-bg:#fff0b3; --mark-line:#d9b93c;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  --sb:290px;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#16181a; --bg-2:#1d2023; --bg-3:#272b2f;
+    --fg:#e8e6e1; --fg-2:#b4b0a8; --fg-3:#847f76;
+    --line:#2f3337; --line-2:#3e4347;
+    --accent:#4fd1c0; --accent-2:#7fe3d5; --accent-bg:#13302d;
+    --warn:#e8b367; --warn-bg:#2e2516; --warn-line:#5c4722;
+    --danger:#f08b84; --danger-bg:#2e1a19; --danger-line:#5e2f2c;
+    --ok:#8fd08c; --ok-bg:#1a2a1a; --ok-line:#35502f;
+    --code-bg:#1b1e21; --code-line:#2b2f33;
+    --t-kw:#d98cc8; --t-str:#8fd08c; --t-com:#6f6a62; --t-num:#e8b367;
+    --t-fn:#7fb3e8; --t-bi:#4fd1c0; --t-op:#a09a90; --t-dec:#e8b367;
+    --mark-bg:#4a3f14; --mark-line:#8a7528;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#16181a; --bg-2:#1d2023; --bg-3:#272b2f;
+  --fg:#e8e6e1; --fg-2:#b4b0a8; --fg-3:#847f76;
+  --line:#2f3337; --line-2:#3e4347;
+  --accent:#4fd1c0; --accent-2:#7fe3d5; --accent-bg:#13302d;
+  --warn:#e8b367; --warn-bg:#2e2516; --warn-line:#5c4722;
+  --danger:#f08b84; --danger-bg:#2e1a19; --danger-line:#5e2f2c;
+  --ok:#8fd08c; --ok-bg:#1a2a1a; --ok-line:#35502f;
+  --code-bg:#1b1e21; --code-line:#2b2f33;
+  --t-kw:#d98cc8; --t-str:#8fd08c; --t-com:#6f6a62; --t-num:#e8b367;
+  --t-fn:#7fb3e8; --t-bi:#4fd1c0; --t-op:#a09a90; --t-dec:#e8b367;
+  --mark-bg:#4a3f14; --mark-line:#8a7528;
+}
+*{box-sizing:border-box}
+html{scroll-padding-top:1.5rem}  /* 捲動行為由 JS 的 goTo() 決定 */
+body{
+  margin:0; background:var(--bg); color:var(--fg);
+  font-family:var(--sans); font-size:16.5px; line-height:1.85;
+  -webkit-font-smoothing:antialiased;
+}
+
+/* ============ 版面 ============ */
+.shell{display:flex; min-height:100vh}
+.sidebar{
+  width:var(--sb); flex:0 0 var(--sb); border-right:1px solid var(--line);
+  background:var(--bg-2); position:sticky; top:0; height:100vh; overflow-y:auto;
+  padding:1.6rem 0 3rem;
+}
+.main{flex:1 1 auto; min-width:0; padding:3rem 3rem 7rem}
+.wrap{max-width:780px; margin:0 auto}
+@media (max-width:1000px){
+  .sidebar{position:fixed; left:0; top:0; z-index:60; transform:translateX(-100%); transition:transform .22s ease; box-shadow:0 0 40px rgba(0,0,0,.25)}
+  .sidebar.open{transform:none}
+  .main{padding:4.2rem 1.1rem 6rem}
+  :root{--sb:280px}
+}
+
+/* ============ 側邊欄 ============ */
+.sb-head{padding:0 1.4rem 1.1rem; border-bottom:1px solid var(--line); margin-bottom:1rem}
+.sb-kicker{font-size:.7rem; letter-spacing:.14em; text-transform:uppercase; color:var(--accent); font-weight:700}
+.sb-title{font-size:1.02rem; font-weight:700; margin:.3rem 0 0; line-height:1.4}
+.sb-meta{font-size:.76rem; color:var(--fg-3); margin-top:.35rem}
+.toc{list-style:none; margin:0; padding:0 .7rem}
+.toc a{
+  display:block; padding:.36rem .7rem; font-size:.855rem; color:var(--fg-2);
+  text-decoration:none; border-radius:6px; line-height:1.5; border-left:2px solid transparent;
+}
+.toc a:hover{background:var(--bg-3); color:var(--fg)}
+.toc a.active{color:var(--accent); background:var(--accent-bg); border-left-color:var(--accent); font-weight:600}
+.toc .sub a{padding-left:1.5rem; font-size:.8rem; color:var(--fg-3)}
+.toc .lv0{font-size:.7rem; letter-spacing:.1em; text-transform:uppercase; color:var(--fg-3); padding:1rem .7rem .25rem; font-weight:700}
+
+/* ============ 浮動控制 ============ */
+.fab{
+  position:fixed; z-index:70; border:1px solid var(--line-2); background:var(--bg-2); color:var(--fg);
+  border-radius:8px; cursor:pointer; font:inherit; font-size:.8rem; padding:.42rem .6rem;
+  box-shadow:0 2px 8px rgba(0,0,0,.08);
+}
+.fab:hover{background:var(--bg-3)}
+#menuBtn{top:.8rem; left:.8rem; display:none}
+@media (max-width:1000px){#menuBtn{display:block}}
+#themeBtn{top:.8rem; right:.8rem}
+.scrim{position:fixed; inset:0; background:rgba(0,0,0,.4); z-index:55; display:none}
+.scrim.on{display:block}
+@media (min-width:1001px){.scrim{display:none!important}}
+
+/* ============ 排版 ============ */
+.hero{border-bottom:1px solid var(--line); padding-bottom:1.8rem; margin-bottom:2.4rem}
+.hero .kicker{font-size:.76rem; letter-spacing:.14em; text-transform:uppercase; color:var(--accent); font-weight:700}
+h1{font-size:2.15rem; line-height:1.25; margin:.5rem 0 .7rem; letter-spacing:-.01em; font-weight:800}
+.lede{font-size:1.08rem; color:var(--fg-2); margin:0}
+.facts{display:flex; flex-wrap:wrap; gap:.5rem; margin-top:1.3rem}
+.fact{font-size:.78rem; background:var(--bg-2); border:1px solid var(--line); border-radius:999px; padding:.26rem .72rem; color:var(--fg-2)}
+.fact b{color:var(--fg); font-weight:650}
+
+h2{
+  font-size:1.5rem; margin:3.4rem 0 1rem; padding-top:.6rem; line-height:1.35; font-weight:750;
+  letter-spacing:-.005em; scroll-margin-top:1.5rem;
+}
+h2 .num{color:var(--accent); font-variant-numeric:tabular-nums; margin-right:.5rem; font-weight:800}
+h3{font-size:1.13rem; margin:2.2rem 0 .7rem; font-weight:700; scroll-margin-top:1.5rem}
+h4{font-size:.98rem; margin:1.6rem 0 .5rem; font-weight:700; color:var(--fg-2)}
+p{margin:0 0 1.1rem}
+a{color:var(--accent); text-decoration:underline; text-decoration-thickness:1px; text-underline-offset:2px}
+ul,ol{margin:0 0 1.2rem; padding-left:1.45rem}
+li{margin:.4rem 0}
+li>ul,li>ol{margin:.4rem 0 .3rem}
+strong{font-weight:680}
+hr{border:0; border-top:1px solid var(--line); margin:2.6rem 0}
+.small{font-size:.86rem; color:var(--fg-3)}
+
+code{
+  font-family:var(--mono); font-size:.855em; background:var(--bg-3);
+  padding:.1em .34em; border-radius:4px; word-break:break-word;
+}
+kbd{font-family:var(--mono); font-size:.8em; background:var(--bg-2); border:1px solid var(--line-2); border-bottom-width:2px; border-radius:4px; padding:.05em .35em}
+
+/* ============ 程式碼區塊 ============ */
+.cb{margin:1.3rem 0; border:1px solid var(--code-line); border-radius:9px; background:var(--code-bg); overflow:hidden}
+.cb-bar{
+  display:flex; align-items:center; gap:.6rem; padding:.42rem .75rem;
+  border-bottom:1px solid var(--code-line); background:var(--bg-2); font-size:.74rem; color:var(--fg-3);
+}
+.cb-lang{font-family:var(--mono); letter-spacing:.04em; text-transform:uppercase; font-weight:700}
+.cb-file{margin-left:.1rem; font-family:var(--mono); color:var(--fg-2)}
+.cb-bar .sp{flex:1}
+.cb-copy{
+  border:1px solid var(--line-2); background:var(--bg); color:var(--fg-2); font:inherit; font-size:.72rem;
+  padding:.16rem .5rem; border-radius:5px; cursor:pointer;
+}
+.cb-copy:hover{background:var(--bg-3); color:var(--fg)}
+.cb-copy.done{color:var(--ok); border-color:var(--ok-line)}
+.cb pre{margin:0; padding:.95rem 1rem; overflow-x:auto; font-family:var(--mono); font-size:.845rem; line-height:1.72; tab-size:4}
+.cb code{background:none; padding:0; font-size:inherit}
+.t-kw{color:var(--t-kw)} .t-str{color:var(--t-str)} .t-com{color:var(--t-com); font-style:italic}
+.t-num{color:var(--t-num)} .t-fn{color:var(--t-fn)} .t-bi{color:var(--t-bi)}
+.t-op{color:var(--t-op)} .t-dec{color:var(--t-dec)}
+
+/* ============ 語法解剖 ============ */
+.anno{margin:1.4rem 0; border:1px solid var(--line); border-radius:9px; overflow:hidden}
+.anno-head{padding:.5rem .85rem; background:var(--bg-2); border-bottom:1px solid var(--line); font-size:.78rem; color:var(--fg-2); font-weight:650}
+.anno-head b{color:var(--accent)}
+.anno .cb{margin:0; border:0; border-radius:0}
+.anno .cb-bar{border-radius:0}
+.pin{
+  background:var(--mark-bg); border-bottom:2px solid var(--mark-line); border-radius:3px;
+  cursor:pointer; padding:0 .12em; position:relative; color:inherit;
+}
+.pin::after{
+  content:attr(data-n); font-size:.62em; vertical-align:super; font-weight:800;
+  color:var(--warn); margin-left:.12em; font-family:var(--sans);
+}
+.pin:hover,.pin.on{background:var(--mark-line); outline:2px solid var(--mark-line)}
+.notes{border-top:1px solid var(--line); background:var(--bg-2)}
+.note{display:flex; gap:.7rem; padding:.62rem .9rem; border-bottom:1px solid var(--line); font-size:.885rem; line-height:1.68}
+.note:last-child{border-bottom:0}
+.note.on{background:var(--accent-bg)}
+.note-n{
+  flex:0 0 1.35rem; height:1.35rem; border-radius:50%; background:var(--mark-line); color:#241f05;
+  display:grid; place-items:center; font-size:.72rem; font-weight:800; margin-top:.18rem; font-variant-numeric:tabular-nums;
+}
+.note div{min-width:0}
+.note code{font-size:.84em}
+
+/* ============ 提示框 ============ */
+.box{margin:1.4rem 0; padding:.95rem 1.1rem; border-radius:9px; border:1px solid var(--line); border-left-width:4px; background:var(--bg-2); font-size:.93rem}
+.box>:last-child{margin-bottom:0}
+.box .bt{font-weight:750; font-size:.84rem; letter-spacing:.02em; margin:0 0 .4rem; display:flex; align-items:center; gap:.4rem}
+.box.tip{border-left-color:var(--accent); background:var(--accent-bg)} .box.tip .bt{color:var(--accent-2)}
+.box.warn{border-left-color:var(--warn-line); background:var(--warn-bg)} .box.warn .bt{color:var(--warn)}
+.box.danger{border-left-color:var(--danger-line); background:var(--danger-bg)} .box.danger .bt{color:var(--danger)}
+.box.ok{border-left-color:var(--ok-line); background:var(--ok-bg)} .box.ok .bt{color:var(--ok)}
+.box.py{border-left-color:var(--t-fn); background:var(--bg-2)} .box.py .bt{color:var(--t-fn)}
+
+/* ============ 表格 ============ */
+.tw{overflow-x:auto; margin:1.4rem 0}
+table{border-collapse:collapse; width:100%; font-size:.885rem}
+th,td{border:1px solid var(--line); padding:.5rem .68rem; text-align:left; vertical-align:top}
+th{background:var(--bg-2); font-weight:700; font-size:.83rem}
+td code{font-size:.85em}
+tbody tr:nth-child(even){background:var(--bg-2)}
+.num-c{text-align:right; font-variant-numeric:tabular-nums; font-family:var(--mono); font-size:.85em}
+
+/* ============ 任務清單 ============ */
+.tasks{margin:1.4rem 0; border:1px solid var(--line); border-radius:9px; overflow:hidden}
+.tasks-head{padding:.7rem .95rem; background:var(--bg-2); border-bottom:1px solid var(--line); display:flex; align-items:center; gap:.7rem; flex-wrap:wrap}
+.tasks-head b{font-size:.92rem}
+.bar{flex:1; min-width:110px; height:6px; background:var(--bg-3); border-radius:999px; overflow:hidden}
+.bar i{display:block; height:100%; width:0; background:var(--accent); transition:width .25s ease}
+.tasks-head .pc{font-size:.78rem; color:var(--fg-3); font-variant-numeric:tabular-nums}
+.task{display:flex; gap:.7rem; padding:.68rem .95rem; border-bottom:1px solid var(--line); font-size:.92rem; line-height:1.7; align-items:flex-start}
+.task:last-child{border-bottom:0}
+.task input{margin:.42rem 0 0; width:1.05rem; height:1.05rem; accent-color:var(--accent); flex:0 0 auto; cursor:pointer}
+.task label{cursor:pointer; min-width:0}
+.task.done label{color:var(--fg-3); text-decoration:line-through; text-decoration-color:var(--line-2)}
+.task .hint{display:block; font-size:.83rem; color:var(--fg-3); text-decoration:none; margin-top:.15rem}
+.task.done .hint{text-decoration:none}
+
+/* ============ 計算器 ============ */
+.calc{margin:1.5rem 0; border:1px solid var(--line); border-radius:9px; background:var(--bg-2); overflow:hidden}
+.calc-head{padding:.6rem .95rem; border-bottom:1px solid var(--line); font-size:.86rem; font-weight:700}
+.calc-body{padding:.95rem}
+.fields{display:grid; grid-template-columns:repeat(auto-fit,minmax(135px,1fr)); gap:.8rem}
+.f label{display:block; font-size:.76rem; color:var(--fg-3); margin-bottom:.22rem; font-weight:650}
+.f input,.f select{
+  width:100%; font:inherit; font-size:.88rem; padding:.4rem .55rem; border-radius:6px;
+  border:1px solid var(--line-2); background:var(--bg); color:var(--fg); font-variant-numeric:tabular-nums;
+}
+.f input:focus,.f select:focus{outline:2px solid var(--accent); outline-offset:1px; border-color:var(--accent)}
+.calc-out{margin-top:1rem; border-top:1px solid var(--line); padding-top:.9rem}
+.calc-out table{font-size:.85rem}
+.tot{display:flex; justify-content:space-between; align-items:baseline; margin-top:.8rem; padding-top:.7rem; border-top:1px dashed var(--line-2); font-size:.9rem}
+.tot b{font-size:1.25rem; font-family:var(--mono); color:var(--accent); font-variant-numeric:tabular-nums}
+.calc .note-s{font-size:.78rem; color:var(--fg-3); margin-top:.7rem}
+
+/* ============ 測驗 ============ */
+.quiz{margin:1.4rem 0; border:1px solid var(--line); border-radius:9px; overflow:hidden}
+.q{border-bottom:1px solid var(--line)}
+.q:last-child{border-bottom:0}
+.q-q{padding:.8rem .95rem; font-size:.93rem; font-weight:650; display:flex; gap:.6rem}
+.q-q .qn{color:var(--accent); font-weight:800; flex:0 0 auto; font-variant-numeric:tabular-nums}
+.q-btn{margin:0 .95rem .8rem; border:1px solid var(--line-2); background:var(--bg-2); color:var(--fg-2); font:inherit; font-size:.79rem; padding:.3rem .7rem; border-radius:6px; cursor:pointer}
+.q-btn:hover{background:var(--bg-3); color:var(--fg)}
+.q-a{display:none; padding:0 .95rem .9rem; font-size:.9rem; line-height:1.75}
+.q-a.on{display:block}
+.q-a .ans{border-left:3px solid var(--ok-line); background:var(--ok-bg); padding:.6rem .8rem; border-radius:0 6px 6px 0}
+.q-a .ans>:last-child{margin-bottom:0}
+
+/* ============ 其他 ============ */
+.flow{margin:1.5rem 0; border:1px solid var(--line); border-radius:9px; background:var(--bg-2); padding:1.1rem; overflow-x:auto}
+.flow svg{display:block; margin:0 auto; max-width:100%; height:auto}
+.foot{margin-top:4rem; padding-top:1.6rem; border-top:1px solid var(--line); font-size:.86rem; color:var(--fg-3)}
+.deliver{border:2px solid var(--accent); border-radius:9px; padding:1rem 1.15rem; margin:1.6rem 0; background:var(--accent-bg)}
+.deliver .bt{font-size:.78rem; letter-spacing:.08em; text-transform:uppercase; color:var(--accent-2); font-weight:800; margin:0 0 .45rem}
+.deliver>:last-child{margin-bottom:0}
+.tag{display:inline-block; font-size:.7rem; font-weight:700; padding:.08rem .42rem; border-radius:4px; background:var(--bg-3); color:var(--fg-2); vertical-align:middle; margin-left:.3rem; letter-spacing:.02em}
+.tag.new{background:var(--accent-bg); color:var(--accent-2)}
+.tag.old{background:var(--danger-bg); color:var(--danger)}
+::selection{background:var(--mark-bg); color:var(--fg)}
+@media print{.sidebar,.fab,.scrim{display:none!important} .main{padding:0} .q-a{display:block!important}}
+
+</style>
+<!--SHARED-CSS:END-->
+</head>
+<body>
+<button class="fab" id="menuBtn" aria-label="目錄">☰ 目錄</button>
+<button class="fab" id="themeBtn" aria-label="切換深淺色">◐</button>
+<div class="scrim" id="scrim"></div>
+<div class="shell">
+<nav class="sidebar" id="sidebar">
+  <div class="sb-head">
+    <div class="sb-kicker">第 1 週 · 第 1 課</div>
+    <div class="sb-title">LLM API 基本功</div>
+    <div class="sb-meta"><a href="index.html">課程索引</a> · <a href="02-tool-calling-mcp.html">第 2 課 →</a></div>
+  </div>
+  <ul class="toc" id="toc"></ul>
+</nav>
+<main class="main">
+<div class="wrap">
+
+<header class="hero">
+  <div class="kicker">第 1 週 · 第 1 課</div>
+  <h1>LLM API 基本功</h1>
+  <p class="lede">這一課結束時，你能用 Python 呼叫兩家模型、拿到通過驗證的 JSON，並算出每次呼叫花了多少錢、等了多久。這是後面七週所有東西的地基。</p>
+  <div class="facts">
+    <span class="fact">預估時間 <b>8–10 小時</b></span>
+    <span class="fact">語言 <b>Python 3.12</b></span>
+    <span class="fact">產出 <b>llm-basics repo</b></span>
+    <span class="fact">前置知識 <b>無</b></span>
+  </div>
+</header>
+
+<h2 id="s0"><span class="num">0</span>這一課要做到什麼</h2>
+
+<p>先說清楚終點，你才知道中間每一步是為了什麼。</p>
+
+<p>本週要做的東西是一支<strong>命令列工具（CLI）</strong>：你在終端機輸入一段「消費者交易申訴」的文字，例如「我上週在網路商店刷了 3,280 元，款項被扣了兩次，到現在都沒退我」，程式呼叫 LLM，然後吐出一段<strong>結構化的 JSON</strong>：</p>
+
+<div class="cb" data-lang="json">
+<pre><code>{
+  "complaint_type": "duplicate_charge",
+  "amount": 3280,
+  "currency": "TWD",
+  "urgency": "high",
+  "suggested_action": "核對授權紀錄，確認重複授權後發起退刷",
+  "needs_human": true,
+  "summary": "消費者反映單筆交易被重複扣款，金額 3,280 元，尚未收到退款。"
+}</code></pre>
+</div>
+
+<p>看起來很簡單，但要做對的話會踩到五件事，而這五件事正好就是這一課的骨架：</p>
+
+<ol>
+  <li><strong>怎麼把 Python 環境弄乾淨</strong>——用 uv，而不是一堆互相打架的 pip 和虛擬環境。</li>
+  <li><strong>怎麼跟模型對話</strong>——Messages API 的 <code>system</code> / <code>user</code> / <code>assistant</code> 結構，以及一個關鍵觀念：<strong>API 沒有記憶</strong>。</li>
+  <li><strong>怎麼保證輸出一定是合法 JSON</strong>——不是在 prompt 裡拜託模型「請輸出 JSON」然後祈禱，而是用 schema 約束它，再用 Pydantic 驗證。</li>
+  <li><strong>怎麼知道這通呼叫花了多少錢、等了多久</strong>——沒有這個數字，你後面六週都無法判斷任何改動是進步還是退步。</li>
+  <li><strong>怎麼在失敗時正確重試</strong>——哪些錯該重試、哪些重試一百次也沒用。</li>
+</ol>
+
+<div class="deliver">
+  <p class="bt">本週產出</p>
+  <p>一個叫 <code>llm-basics</code> 的 repo，加上一張<strong>三模型比較表</strong>（品質 / 延遲 / 每千次成本）。這張表會是你履歷和面試時第一個可以攤開來講的東西——它證明你不是「會呼叫 API」，而是<strong>會用數據做技術選擇</strong>。</p>
+</div>
+
+<div class="box tip">
+  <p class="bt">關於這份教材的程式碼</p>
+  <p>所有 Claude 相關的程式碼、模型 ID 和價格，都是對照 2026 年 9 月的官方 SDK 文件寫的。LLM API 這兩年變動很大，<strong>網路上 2024–2025 年的教學有不少參數已經會直接回報 400 錯誤</strong>（最經典的就是 <code>temperature</code>，<a href="#s4-temp">第 4 節</a>會詳細說）。如果你看到別的教學和這裡不一樣，先以官方文件為準。</p>
+</div>
+
+<h2 id="s1"><span class="num">1</span>開發環境：uv 與虛擬環境</h2>
+
+<p>這一節全部是 Python 生態系的基礎建設。如果你是從 C#/.NET 過來的，這裡的心智模型對照大概是：</p>
+
+<div class="tw">
+<table>
+<thead><tr><th>概念</th><th>.NET 世界</th><th>Python 世界</th></tr></thead>
+<tbody>
+<tr><td>專案描述檔</td><td><code>.csproj</code></td><td><code>pyproject.toml</code></td></tr>
+<tr><td>鎖定版本</td><td><code>packages.lock.json</code></td><td><code>uv.lock</code></td></tr>
+<tr><td>套件來源</td><td>NuGet</td><td>PyPI</td></tr>
+<tr><td>裝套件</td><td><code>dotnet add package</code></td><td><code>uv add</code></td></tr>
+<tr><td>執行</td><td><code>dotnet run</code></td><td><code>uv run</code></td></tr>
+<tr><td>相依隔離</td><td>每個專案天生隔離</td><td><strong>要靠虛擬環境，預設不隔離</strong></td></tr>
+</tbody>
+</table>
+</div>
+
+<p>最後一列是 Python 新手踩坑的根源，值得花兩分鐘講清楚。</p>
+
+<h3>為什麼需要虛擬環境</h3>
+
+<p>Python 預設把套件裝在<strong>全域</strong>的位置。所以如果你有 A 專案需要 <code>pydantic</code> 1.x、B 專案需要 <code>pydantic</code> 2.x，全域只能有一個版本，兩個專案就會打架。你裝好 B 之後 A 就壞了，而且錯誤訊息通常看不出是版本問題。</p>
+
+<p><strong>虛擬環境（virtual environment）</strong>就是在專案資料夾裡開一個獨立的 Python 環境，裡面有自己的一份套件。啟動它之後，<code>python</code> 和 <code>pip</code> 指向的就是這個資料夾裡的版本，跟系統和其他專案完全無關。資料夾通常叫 <code>.venv/</code>。</p>
+
+<div class="box danger">
+  <p class="bt">絕對不要把 .venv 提交進 git</p>
+  <p><code>.venv/</code> 裡面是上千個檔案、幾百 MB，而且綁死你這台機器的路徑和架構（Apple Silicon 編出來的東西在 Linux 上不能跑）。它要被 <code>.gitignore</code> 擋掉。本專案的 <code>.gitignore</code> 已經處理好了。別人要重建環境是靠 <code>pyproject.toml</code> + <code>uv.lock</code>，不是靠你的 <code>.venv</code>。</p>
+</div>
+
+<h3>uv 是什麼，為什麼用它</h3>
+
+<p>Python 的套件工具歷史上很分裂：<code>pip</code>（裝套件）、<code>venv</code>（建虛擬環境）、<code>pip-tools</code> 或 <code>poetry</code>（鎖版本）、<code>pyenv</code>（管 Python 版本）——四件事四個工具。</p>
+
+<p><strong>uv</strong> 用一個工具做完這四件事，而且用 Rust 寫的，快得很誇張（裝套件通常比 pip 快 10–100 倍）。它還會自動幫你管虛擬環境：你不需要手動 <code>activate</code>，只要用 <code>uv run</code> 執行東西，它就會自動用專案的 <code>.venv</code>。</p>
+
+<h4>安裝 uv</h4>
+
+<div class="cb" data-lang="bash" data-file="終端機">
+<pre><code># 用官方安裝腳本（Mac / Linux）
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# 或者如果你已經有 Homebrew
+brew install uv
+
+# 確認裝好了
+uv --version</code></pre>
+</div>
+
+<h4>建立專案</h4>
+
+<p>本週的練習是獨立的 <code>llm-basics</code> repo，所以在你放專案的地方開一個新資料夾：</p>
+
+<div class="anno">
+<div class="anno-head">逐行解剖 · 點黃色標記看說明</div>
+<div class="cb" data-lang="bash" data-file="終端機" data-anno="1">
+<pre><code>uv init llm-basics --python 3.12
+cd llm-basics
+uv add anthropic openai pydantic python-dotenv
+uv add --dev pytest
+uv run python -c "import anthropic; print(anthropic.__version__)"</code></pre>
+</div>
+<div class="notes">
+  <div class="note" data-line="1"><div class="note-n">1</div><div><code>uv init</code> 建立專案骨架：一個 <code>pyproject.toml</code>、一個 <code>.python-version</code>、一個 <code>main.py</code>。<code>--python 3.12</code> 指定版本，<strong>uv 會自己去下載 Python 3.12</strong>，你不必先裝好它，也不會動到系統的 Python。</div></div>
+  <div class="note" data-line="2"><div class="note-n">2</div><div>進到專案資料夾。後面所有 <code>uv</code> 指令都要在這裡面跑，它靠 <code>pyproject.toml</code> 認出專案。</div></div>
+  <div class="note" data-line="3"><div class="note-n">3</div><div><code>uv add</code> 裝套件：寫進 <code>pyproject.toml</code> 的相依清單、解析版本寫進 <code>uv.lock</code>、裝進 <code>.venv</code>——一個指令做完三件事。這四個套件分別是：<code>anthropic</code>（Claude 官方 SDK）、<code>openai</code>（OpenAI 官方 SDK）、<code>pydantic</code>（資料驗證，本課重點）、<code>python-dotenv</code>（讀 <code>.env</code> 檔）。</div></div>
+  <div class="note" data-line="4"><div class="note-n">4</div><div><code>--dev</code> 表示這是<strong>開發時才需要</strong>的相依，部署到生產環境時不用裝。測試框架、linter 都屬於這類。</div></div>
+  <div class="note" data-line="5"><div class="note-n">5</div><div><code>uv run</code> 是你之後最常用的指令。它會確保 <code>.venv</code> 和 <code>uv.lock</code> 同步，然後在那個環境裡執行後面的命令。<strong>你永遠不需要手動 <code>source .venv/bin/activate</code></strong>。<code>python -c "..."</code> 是直接執行一行 Python，這裡用來確認 SDK 真的裝起來了。</div></div>
+</div>
+</div>
+
+<h4>日常會用到的 uv 指令</h4>
+
+<div class="tw">
+<table>
+<thead><tr><th>指令</th><th>做什麼</th><th>什麼時候用</th></tr></thead>
+<tbody>
+<tr><td><code>uv add 套件名</code></td><td>新增相依</td><td>要用新套件時</td></tr>
+<tr><td><code>uv remove 套件名</code></td><td>移除相依</td><td>不要某個套件時</td></tr>
+<tr><td><code>uv run python app.py</code></td><td>在專案環境裡跑腳本</td><td>每天</td></tr>
+<tr><td><code>uv run pytest</code></td><td>跑測試</td><td>每天</td></tr>
+<tr><td><code>uv sync</code></td><td>照 <code>uv.lock</code> 重建環境</td><td>剛 clone 下來、或換了機器</td></tr>
+<tr><td><code>uv lock --upgrade</code></td><td>升級鎖定的版本</td><td>想更新套件時</td></tr>
+<tr><td><code>uv tree</code></td><td>看相依關係樹</td><td>debug 版本衝突</td></tr>
+</tbody>
+</table>
+</div>
+
+<h3>API key 要放哪裡</h3>
+
+<p>API key 是密碼等級的東西。<strong>永遠不要寫在程式碼裡</strong>——一旦進了 git 歷史，即使你後來刪掉，歷史紀錄裡還是查得到，而掃 GitHub 找洩漏 key 的機器人非常勤勞。</p>
+
+<p>標準做法是放在專案根目錄的 <code>.env</code> 檔，然後用 <code>python-dotenv</code> 把它讀進<strong>環境變數</strong>。</p>
+
+<div class="cb" data-lang="bash" data-file=".env">
+<pre><code># 這個檔案絕對不能進 git
+ANTHROPIC_API_KEY=sk-ant-api03-xxxxxxxxxxxxxxxx
+OPENAI_API_KEY=sk-proj-xxxxxxxxxxxxxxxx</code></pre>
+</div>
+
+<div class="cb" data-lang="bash" data-file="終端機">
+<pre><code># 確認 .env 真的被 git 忽略了（會印出忽略它的那條規則）
+git check-ignore -v .env
+
+# 順手建一個範本給未來的自己看（這個「可以」進 git，因為沒有真的 key）
+printf 'ANTHROPIC_API_KEY=\nOPENAI_API_KEY=\n' > .env.example</code></pre>
+</div>
+
+<div class="box warn">
+  <p class="bt">進 Console 設用量上限，現在就去</p>
+  <p>學習階段最容易出事的不是技術問題，是<strong>一個寫錯的迴圈在你睡覺時燒掉幾百美金</strong>。兩家都去後台設好硬上限：</p>
+  <ul>
+    <li><strong>Anthropic Console</strong> → Billing → 設定 monthly spend limit，先設 20 美金就好</li>
+    <li><strong>OpenAI Platform</strong> → Settings → Limits → 設 usage limit</li>
+  </ul>
+  <p>另外在 <a href="#s8">第 8 節</a>我們會寫一個 <code>max_retries</code> 和最大步數的保護，這些都是同一件事的不同層次。</p>
+</div>
+
+<h2 id="s2"><span class="num">2</span>Python 速成：這一課用得到的語法</h2>
+
+<p>這一節只講這一課會用到的語法，而且每個都講清楚「為什麼需要它」。不是完整的 Python 教學，是<strong>讀懂後面程式碼所需的最小集合</strong>。如果你已經熟 Python，可以跳到<a href="#s3">第 3 節</a>。</p>
+
+<h3 id="s2-hint">型別註解（type hints）</h3>
+
+<p>Python 是動態型別語言，變數不用宣告型別。但從 3.5 開始可以<strong>選擇性地標註</strong>型別：</p>
+
+<div class="cb" data-lang="python">
+<pre><code># 沒有註解也能跑
+def add(a, b):
+    return a + b
+
+# 加上註解：a 和 b 是 int，回傳值是 int
+def add(a: int, b: int) -> int:
+    return a + b
+
+# 變數也可以註解
+name: str = "frank"
+amount: float = 3280.0
+is_urgent: bool = True</code></pre>
+</div>
+
+<div class="box py">
+  <p class="bt">關鍵：Python 執行時並不檢查型別註解</p>
+  <p>上面那個 <code>add(a: int, b: int)</code>，你傳 <code>add("x", "y")</code> 它照跑，回傳 <code>"xy"</code>。註解對 Python 直譯器來說基本上是<strong>註解</strong>——它只是把資訊存在 <code>__annotations__</code> 裡，不做任何驗證。</p>
+  <p>那為什麼要寫？因為<strong>別的工具會讀它</strong>：編輯器用它做自動完成和錯誤提示、mypy 這類工具用它做靜態檢查，而<strong>Pydantic 用它做真正的執行時驗證</strong>。這就是這一課非學不可的原因——我們整個 structured output 都建立在型別註解上。</p>
+</div>
+
+<h4>常用的複合型別</h4>
+
+<div class="cb" data-lang="python">
+<pre><code># 容器型別（Python 3.9+ 可以直接用小寫內建型別）
+names: list[str] = ["a", "b"]            # 字串的 list
+scores: dict[str, int] = {"math": 90}    # key 是 str、value 是 int 的 dict
+pair: tuple[int, str] = (1, "a")         # 固定長度、固定型別的 tuple
+
+# 可能是 None：用 | None（3.10+ 的寫法）
+note: str | None = None                  # 可以是字串，也可以是 None
+
+# 只能是這幾個特定值：Literal
+from typing import Literal
+level: Literal["low", "medium", "high"] = "high"</code></pre>
+</div>
+
+<p><code>Literal</code> 後面講 structured output 時會大量用到——它是我們告訴模型「緊急度只能是這三個值之一」的方式。</p>
+
+<div class="box tip">
+  <p class="bt">你可能在舊教材看到的寫法</p>
+  <p>舊版 Python 要從 <code>typing</code> import：<code>List[str]</code>、<code>Dict[str, int]</code>、<code>Optional[str]</code>、<code>Union[int, str]</code>。在 3.12 這些還能用（為了相容），但新寫法更乾淨：<code>list[str]</code>、<code>dict[str, int]</code>、<code>str | None</code>、<code>int | str</code>。<strong>我們用新寫法。</strong></p>
+</div>
+
+<h3>dict 與 list 字面值</h3>
+
+<p>呼叫 LLM API 的參數幾乎全是巢狀的 dict 和 list，所以這個要很熟：</p>
+
+<div class="anno">
+<div class="anno-head">這個結構你接下來會寫幾百次 · 點標記看說明</div>
+<div class="cb" data-lang="python" data-anno="2">
+<pre><code>messages = [
+    {"role": "user", "content": "你好"},
+    {"role": "assistant", "content": "有什麼可以幫你？"},
+    {"role": "user", "content": "我的交易被重複扣款了"},
+]</code></pre>
+</div>
+<div class="notes">
+  <div class="note" data-line="1"><div class="note-n">1</div><div>外層 <code>[...]</code> 是 <strong>list</strong>（有順序、可重複），對應其他語言的陣列。這裡順序很重要——它就是對話的時間順序。</div></div>
+  <div class="note" data-line="2"><div class="note-n">2</div><div>裡面每個 <code>{...}</code> 是 <strong>dict</strong>（字典 / 鍵值對），對應 JS 的物件、C# 的 <code>Dictionary</code>。<code>"role"</code> 和 <code>"content"</code> 是 key。</div></div>
+  <div class="note" data-line="4"><div class="note-n">3</div><div>注意最後一個元素後面<strong>有逗號</strong>。Python 允許這個「尾逗號」，而且是推薦的風格——下次新增一行時 diff 只會多一行，不會動到前一行。</div></div>
+</div>
+</div>
+
+<p>取值和修改：</p>
+
+<div class="cb" data-lang="python">
+<pre><code>m = {"role": "user", "content": "你好"}
+
+m["role"]                 # "user"  —— 用中括號取值
+m["role"] = "assistant"   # 改值
+m["extra"] = 123          # 新增 key（dict 可以隨時長出新 key）
+
+m.get("missing")          # None —— key 不存在時回傳 None，不會爆
+m["missing"]              # KeyError！—— 直接用中括號取不存在的 key 會丟例外
+
+len(messages)             # 3   —— list 長度
+messages[0]               # 第一個元素（從 0 開始算）
+messages[-1]              # 最後一個元素（負索引從尾巴算）
+messages.append({"role": "user", "content": "再問一個問題"})  # 加到尾巴</code></pre>
+</div>
+
+<div class="box warn">
+  <p class="bt"><code>m["key"]</code> vs <code>m.get("key")</code></p>
+  <p>這是新手最常見的執行時錯誤來源。處理 API 回傳的資料時，如果某個欄位<strong>可能不存在</strong>，用 <code>.get()</code>；如果它一定該存在、不存在就是程式有 bug，用 <code>[]</code> 讓它早點爆掉。<strong>早爆比靜默錯誤好。</strong></p>
+</div>
+
+<h3>f-string（字串插值）</h3>
+
+<div class="cb" data-lang="python">
+<pre><code>amount = 3280
+model = "claude-opus-5-5"
+
+# f 開頭的字串，{} 裡面可以放任何運算式
+print(f"金額 {amount} 元，用 {model} 處理")
+# 金額 3280 元，用 claude-opus-5-5 處理
+
+# 格式化：: 後面是格式規格
+print(f"成本 ${0.00123:.4f}")      # 成本 $0.0012   —— 小數點後 4 位
+print(f"延遲 {1234.5678:.0f} ms")  # 延遲 1235 ms   —— 取整數
+print(f"token {12345:,}")          # token 12,345   —— 千分位逗號
+
+# = 會把運算式本身也印出來，debug 超好用
+print(f"{amount=}")                # amount=3280</code></pre>
+</div>
+
+<h3 id="s2-with"><code>with</code> 陳述句（context manager）</h3>
+
+<p>這個一定要懂，因為 <strong>streaming 的寫法就是 <code>with</code></strong>。</p>
+
+<p><code>with</code> 的作用是：<strong>保證離開這個區塊時一定會做收尾工作</strong>，即使中間發生錯誤。最經典的例子是開檔案：</p>
+
+<div class="cb" data-lang="python">
+<pre><code># 不好的寫法：如果中間出錯，檔案永遠不會關
+f = open("data.txt")
+content = f.read()
+f.close()          # 如果上一行爆了，這行不會執行
+
+# 好的寫法：離開 with 區塊時，Python 保證幫你呼叫 f.close()
+with open("data.txt") as f:
+    content = f.read()
+# 到這裡檔案一定已經關了，就算 read() 丟了例外也一樣</code></pre>
+</div>
+
+<p>Streaming 用同樣的模式，因為串流是一條<strong>需要被關閉的網路連線</strong>：</p>
+
+<div class="cb" data-lang="python">
+<pre><code>with client.messages.stream(...) as stream:
+    for text in stream.text_stream:
+        print(text, end="", flush=True)
+# 離開 with 時，SDK 保證把連線關好</code></pre>
+</div>
+
+<div class="box py">
+  <p class="bt">縮排就是程式區塊</p>
+  <p>Python 沒有大括號，<strong>縮排本身就是語法</strong>。<code>with</code>、<code>if</code>、<code>for</code>、<code>def</code> 後面接冒號 <code>:</code>，然後下面縮排的那幾行就是它的區塊。縮排用 <strong>4 個空格</strong>（不要用 Tab，也不要混用——混用會直接語法錯誤）。編輯器通常會幫你處理好。</p>
+</div>
+
+<h3>裝飾器（decorator）</h3>
+
+<p>你會在文件和範例裡看到 <code>@</code> 開頭的東西，知道它在幹什麼就好：</p>
+
+<div class="cb" data-lang="python">
+<pre><code>@some_decorator
+def my_function():
+    ...</code></pre>
+</div>
+
+<p>這等同於 <code>my_function = some_decorator(my_function)</code>——<strong>用一個函式包裝另一個函式，加上額外行為</strong>。這一課我們不會自己寫裝飾器，但第 2 週手寫 tool-use 迴圈時會看到 <code>@beta_tool</code> 這類東西，到時候知道「它是在把我的函式註冊成一個工具」就夠了。</p>
+
+<h3 id="s2-async">async / await</h3>
+
+<p>這是本節最抽象的概念，但 LLM 應用繞不過去，因為<strong>LLM 呼叫很慢</strong>（幾秒到幾十秒），而慢的原因是在等網路，不是在算東西。</p>
+
+<h4>問題：同步程式在等待時完全閒置</h4>
+
+<div class="cb" data-lang="python">
+<pre><code># 同步：一個一個來
+result_a = call_llm("申訴 A")   # 等 3 秒
+result_b = call_llm("申訴 B")   # 再等 3 秒
+result_c = call_llm("申訴 C")   # 再等 3 秒
+# 總共 9 秒，而這 9 秒裡 CPU 幾乎沒事做，都在等網路</code></pre>
+</div>
+
+<h4>解法：async 讓等待的時間可以拿去做別的事</h4>
+
+<div class="anno">
+<div class="anno-head">async 的三個關鍵字 · 點標記看說明</div>
+<div class="cb" data-lang="python" data-anno="3">
+<pre><code>import asyncio
+from anthropic import AsyncAnthropic
+
+client = AsyncAnthropic()
+
+async def call_llm(text: str) -> str:
+    response = await client.messages.create(
+        model="claude-opus-5-5",
+        max_tokens=1024,
+        messages=[{"role": "user", "content": text}],
+    )
+    return response.content[0].text
+
+async def main() -> None:
+    results = await asyncio.gather(
+        call_llm("申訴 A"),
+        call_llm("申訴 B"),
+        call_llm("申訴 C"),
+    )
+    print(results)
+
+asyncio.run(main())</code></pre>
+</div>
+<div class="notes">
+  <div class="note" data-line="4"><div class="note-n">1</div><div><code>AsyncAnthropic</code> 是非同步版的客戶端。<strong>同步用 <code>Anthropic()</code>、非同步用 <code>AsyncAnthropic()</code></strong>，兩者方法名稱一樣，差別只在要不要 <code>await</code>。</div></div>
+  <div class="note" data-line="6"><div class="note-n">2</div><div><code>async def</code> 宣告這是個「協程函式」。呼叫它<strong>不會立刻執行</strong>，而是回傳一個協程物件，要 <code>await</code> 或交給事件迴圈才會真的跑。</div></div>
+  <div class="note" data-line="7"><div class="note-n">3</div><div><code>await</code> 的意思是「這裡要等，但<strong>等的時候把控制權交出去</strong>，讓別的協程去跑」。只能在 <code>async def</code> 裡面用。</div></div>
+  <div class="note" data-line="15"><div class="note-n">4</div><div><code>asyncio.gather(...)</code> 把多個協程<strong>同時</strong>丟出去跑，全部完成後回傳結果 list，順序和你傳進去的一樣。上面三個呼叫總共約 3 秒，不是 9 秒。</div></div>
+  <div class="note" data-line="22"><div class="note-n">5</div><div><code>asyncio.run(main())</code> 是從「同步世界」進入「非同步世界」的入口。一支程式通常只有這一個地方呼叫它。</div></div>
+</div>
+</div>
+
+<div class="box tip">
+  <p class="bt">這一課要不要用 async？</p>
+  <p>本週的 CLI 是一次處理一筆申訴，<strong>用同步的 <code>Anthropic()</code> 就好，程式碼簡單很多</strong>。但實作任務裡有一項是「用 10 筆假申訴比較品質、延遲、成本」——那一支批次比較的腳本用 <code>asyncio.gather</code> 會從 30 秒變成 3 秒，很值得。所以兩種都會寫到。</p>
+</div>
+
+<h3>其他零碎但會用到的</h3>
+
+<div class="cb" data-lang="python">
+<pre><code># import 的幾種形式
+import anthropic                      # 整個模組，用 anthropic.Anthropic()
+from anthropic import Anthropic       # 只拿一個名字，用 Anthropic()
+from pydantic import BaseModel, Field # 一次拿多個
+
+# if __name__ == "__main__": 這個慣用句
+def main():
+    print("跑起來了")
+
+if __name__ == "__main__":
+    main()
+# 意思是「只有當這個檔案被直接執行時才跑 main()」。
+# 如果這個檔案被別人 import，main() 不會自動執行。
+
+# 三引號字串：可以跨行，寫 system prompt 的標準做法
+SYSTEM_PROMPT = """你是金流客服的分類助手。
+
+你的任務是把消費者申訴分類，並判斷緊急度。
+不要臆測未提供的資訊。"""
+
+# Enum：定義一組固定的選項
+from enum import Enum
+
+class Urgency(str, Enum):
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+
+Urgency.HIGH.value   # "high"</code></pre>
+</div>
+
+<h2 id="s3"><span class="num">3</span>第一次呼叫：Messages API</h2>
+
+<p>Claude 的 API 幾乎所有東西都走同一個端點：<code>POST /v1/messages</code>。Tool calling、結構化輸出、streaming、思考模式——全都是這個端點上的參數，不是不同的 API。這個設計很乾淨，記住它可以省下很多困惑。</p>
+
+<h3>最小可運作的範例</h3>
+
+<div class="cb" data-lang="python" data-file="hello.py">
+<pre><code>import anthropic
+from dotenv import load_dotenv
+
+load_dotenv()                      # 把 .env 讀進環境變數
+client = anthropic.Anthropic()     # SDK 自動從 ANTHROPIC_API_KEY 讀 key
+
+response = client.messages.create(
+    model="claude-opus-5-5",
+    max_tokens=1024,
+    messages=[{"role": "user", "content": "一句話解釋什麼是信用卡授權。"}],
+)
+
+print(response.content[0].text)</code></pre>
+</div>
+
+<div class="cb" data-lang="bash" data-file="終端機">
+<pre><code>uv run python hello.py</code></pre>
+</div>
+
+<div class="box tip">
+  <p class="bt">不要把 API key 傳進 <code>Anthropic()</code></p>
+  <p>你會看到有些教學寫 <code>Anthropic(api_key="sk-ant-...")</code>。能跑，但那個字串很容易跟著程式碼進 git。<strong>寫 <code>Anthropic()</code> 就好</strong>——SDK 會自己去找 <code>ANTHROPIC_API_KEY</code> 環境變數。少一個出錯的機會。</p>
+</div>
+
+<h3 id="s3-roles">三種角色：system / user / assistant</h3>
+
+<div class="tw">
+<table>
+<thead><tr><th>角色</th><th>放在哪</th><th>是什麼</th><th>誰寫的</th></tr></thead>
+<tbody>
+<tr><td><code>system</code></td><td><strong>獨立的 <code>system</code> 參數</strong>，不在 <code>messages</code> 裡</td><td>模型的角色設定、邊界、輸出格式要求</td><td>你（開發者）</td></tr>
+<tr><td><code>user</code></td><td><code>messages</code> 陣列</td><td>使用者說的話，或你餵給它的資料</td><td>使用者，或你的程式</td></tr>
+<tr><td><code>assistant</code></td><td><code>messages</code> 陣列</td><td>模型之前的回答</td><td>模型</td></tr>
+</tbody>
+</table>
+</div>
+
+<p><code>system</code> 不放在 <code>messages</code> 裡，這是 Claude API 和某些其他 API 的差別，值得特別記一下：</p>
+
+<div class="cb" data-lang="python">
+<pre><code>response = client.messages.create(
+    model="claude-opus-5-5",
+    max_tokens=1024,
+    system="你是金流客服助手。只根據使用者提供的資訊回答，不要臆測。",
+    messages=[{"role": "user", "content": "我的款項被扣兩次"}],
+)</code></pre>
+</div>
+
+<h3 id="s3-stateless">關鍵觀念：API 完全沒有記憶</h3>
+
+<p>這是最多人第一次用 LLM API 時搞錯的事。</p>
+
+<p><strong>每一次 <code>messages.create()</code> 都是全新的、互不相關的請求。</strong>伺服器端不會記得你上一次問了什麼。你在 Claude 網頁版或 ChatGPT 感受到的「連續對話」，是<strong>前端程式每次都把整個對話歷史重新送一遍</strong>造出來的錯覺。</p>
+
+<div class="flow">
+<svg viewBox="0 0 700 290" role="img" aria-label="多輪對話的請求結構示意圖">
+  <defs>
+    <marker id="ar" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 z" fill="currentColor"/>
+    </marker>
+  </defs>
+  <g font-family="ui-monospace, monospace" font-size="11" fill="currentColor">
+    <!-- turn 1 -->
+    <text x="0" y="16" font-size="12" font-weight="700">第 1 輪請求</text>
+    <rect x="0" y="24" width="300" height="26" rx="4" fill="none" stroke="currentColor" stroke-opacity=".35"/>
+    <text x="10" y="41">user: "我的款項被扣兩次"</text>
+    <line x1="310" y1="37" x2="390" y2="37" stroke="currentColor" stroke-opacity=".5" marker-end="url(#ar)"/>
+    <rect x="400" y="24" width="290" height="26" rx="4" fill="none" stroke="currentColor" stroke-opacity=".35" stroke-dasharray="3 3"/>
+    <text x="410" y="41" fill-opacity=".75">assistant: "請提供訂單號…"</text>
+
+    <!-- turn 2 -->
+    <text x="0" y="86" font-size="12" font-weight="700">第 2 輪請求 — 你要自己把前兩句也送進來</text>
+    <rect x="0" y="94" width="300" height="78" rx="4" fill="none" stroke="currentColor" stroke-opacity=".35"/>
+    <text x="10" y="111" fill-opacity=".55">user: "我的款項被扣兩次"</text>
+    <text x="10" y="129" fill-opacity=".55">assistant: "請提供訂單號…"</text>
+    <text x="10" y="153" font-weight="700">user: "訂單號 A12345"</text>
+    <line x1="310" y1="133" x2="390" y2="133" stroke="currentColor" stroke-opacity=".5" marker-end="url(#ar)"/>
+    <rect x="400" y="120" width="290" height="26" rx="4" fill="none" stroke="currentColor" stroke-opacity=".35" stroke-dasharray="3 3"/>
+    <text x="410" y="137" fill-opacity=".75">assistant: "查到了，這筆…"</text>
+
+    <text x="0" y="205" font-size="11.5" fill-opacity=".75">灰色的部分每一輪都要重送 —— 所以：</text>
+    <text x="14" y="227" font-size="11.5" fill-opacity=".75">· 對話越長，每次請求的 input token 越多，越貴</text>
+    <text x="14" y="247" font-size="11.5" fill-opacity=".75">· 總長度有上限（context window），超過就會被拒絕</text>
+    <text x="14" y="267" font-size="11.5" fill-opacity=".75">· 這是 prompt caching 存在的理由（第 2 週會學）</text>
+  </g>
+</svg>
+</div>
+
+<p>所以多輪對話的程式長這樣——<strong>你自己維護一個 list</strong>：</p>
+
+<div class="cb" data-lang="python" data-file="chat.py">
+<pre><code>messages = []
+
+while True:
+    user_input = input("你： ")
+    if user_input.strip() in {"exit", "quit", ""}:
+        break
+
+    # 1. 把使用者的話加進歷史
+    messages.append({"role": "user", "content": user_input})
+
+    # 2. 把「整個歷史」送出去
+    response = client.messages.create(
+        model="claude-opus-5-5",
+        max_tokens=2048,
+        system="你是金流客服助手。",
+        messages=messages,
+    )
+
+    reply = response.content[0].text
+    print(f"助手： {reply}")
+
+    # 3. 把模型的回答也加進歷史，下一輪才有上下文
+    messages.append({"role": "assistant", "content": reply})</code></pre>
+</div>
+
+<div class="box danger">
+  <p class="bt">漏掉第 3 步是超常見的 bug</p>
+  <p>如果你忘記把 assistant 的回答 append 回去，模型下一輪就會完全不記得自己剛剛說過什麼，表現得像失憶。而且因為程式不會報錯，你只會覺得「這模型好笨」。</p>
+  <p>更穩的寫法是 <code>messages.append({"role": "assistant", "content": response.content})</code>——直接存整個 content list 而不是只存文字。這樣在有 thinking block 或 tool use 的情況下才不會遺漏資訊，第 2 週手寫 tool-use 迴圈時這點會變成必要條件。</p>
+</div>
+
+<h3 id="s3-blocks">回傳值的結構：content 是一個 list</h3>
+
+<p><code>response.content</code> <strong>不是字串，是一個「內容區塊」的 list</strong>。每個區塊有 <code>.type</code>，可能是 <code>"text"</code>、<code>"thinking"</code>、<code>"tool_use"</code> 等等。</p>
+
+<p>所以 <code>response.content[0].text</code> 這種寫法<strong>只在最單純的情況下安全</strong>。一旦開了思考模式或工具呼叫，第 0 個區塊可能不是文字，這行就會爆。正確的寫法是檢查 type：</p>
+
+<div class="cb" data-lang="python">
+<pre><code># 脆弱：假設第一個區塊一定是文字
+text = response.content[0].text
+
+# 穩健：挑出所有文字區塊
+text = "".join(b.text for b in response.content if b.type == "text")
+
+# 或者只要第一個文字區塊
+text = next((b.text for b in response.content if b.type == "text"), "")</code></pre>
+</div>
+
+<p>完整的回傳物件長這樣：</p>
+
+<div class="cb" data-lang="python">
+<pre><code>response.id            # "msg_01ABC..."  這次呼叫的 ID
+response.model          # "claude-opus-5-5"  實際用的模型
+response.role           # "assistant"  固定是這個
+response.content        # [TextBlock(...), ...]  內容區塊 list
+response.stop_reason    # 為什麼停下來（下面詳述）
+response.usage          # token 用量，算成本用
+response._request_id    # 回報問題給 Anthropic 時要附上這個</code></pre>
+</div>
+
+<h4><code>stop_reason</code>：為什麼停下來</h4>
+
+<div class="tw">
+<table>
+<thead><tr><th>值</th><th>意思</th><th>你該怎麼處理</th></tr></thead>
+<tbody>
+<tr><td><code>end_turn</code></td><td>正常說完了</td><td>照常處理</td></tr>
+<tr><td><code>max_tokens</code></td><td><strong>撞到 <code>max_tokens</code> 上限被截斷</strong></td><td>輸出不完整！JSON 可能解析失敗。要調高上限或縮短任務</td></tr>
+<tr><td><code>tool_use</code></td><td>模型要呼叫工具</td><td>執行工具、把結果送回去（第 2 週的主題）</td></tr>
+<tr><td><code>refusal</code></td><td>安全機制拒絕了這個請求</td><td>讀 <code>response.stop_details.category</code> 看原因</td></tr>
+<tr><td><code>pause_turn</code></td><td>長時間執行的伺服器端工具暫停</td><td>把回傳接回去續跑</td></tr>
+</tbody>
+</table>
+</div>
+
+<div class="box warn">
+  <p class="bt">一定要檢查 <code>stop_reason</code>，尤其是做 structured output 時</p>
+  <p><code>max_tokens</code> 截斷是靜默的——HTTP 狀態碼是 200，看起來成功了，但 JSON 少了後半截。如果你直接丟給 <code>json.loads()</code> 就會收到一個看不出原因的解析錯誤。<strong>先檢查 <code>stop_reason == "max_tokens"</code>，你就知道是輸出被切掉，不是模型格式寫錯。</strong></p>
+  <p><code>response.stop_details</code> 只有在 <code>stop_reason == "refusal"</code> 時才有值，其他情況是 <code>None</code>——取用前要先判斷，不然會 <code>AttributeError</code>。</p>
+</div>
+
+<h2 id="s4"><span class="num">4</span>參數詳解：token、視窗、以及 temperature 的真相</h2>
+
+<h3 id="s4-token">token 是什麼</h3>
+
+<p>模型不是一個字一個字處理文字，是以 <strong>token</strong> 為單位。token 大致是「常見的字詞片段」：英文大約 1 token ≈ 4 個字元，<strong>中文通常 1 個字就要 1–2 個 token</strong>（所以中文的 token 成本比英文高）。</p>
+
+<p>計價、context window、<code>max_tokens</code> 全都以 token 計算，所以你要能估算。<strong>不要用 <code>tiktoken</code> 之類的第三方套件去估 Claude 的 token——那是 OpenAI 的分詞器，數字不對。</strong>用官方的計數端點：</p>
+
+<div class="cb" data-lang="python">
+<pre><code>count = client.messages.count_tokens(
+    model="claude-opus-5-5",
+    system=SYSTEM_PROMPT,
+    messages=[{"role": "user", "content": complaint_text}],
+)
+print(count.input_tokens)   # 這次請求的 input token 數</code></pre>
+</div>
+
+<p>這個端點<strong>不會真的跑推論，所以不收費</strong>。在送出昂貴請求前先估一下很合理。</p>
+
+<h3 id="s4-maxtokens"><code>max_tokens</code>：輸出的硬上限</h3>
+
+<p>這是<strong>必填參數</strong>，而且很多人設錯。</p>
+
+<div class="box danger">
+  <p class="bt"><code>max_tokens</code> 是「輸出」上限，不是「總共」上限</p>
+  <p>它只限制模型<strong>生成</strong>多少 token，和你送進去的 input 無關。而且它是<strong>硬切斷</strong>——模型不知道這個數字存在，寫到一半被砍掉就是被砍掉，不會自己收尾。這時 <code>stop_reason</code> 會是 <code>max_tokens</code>。</p>
+</div>
+
+<div class="tw">
+<table>
+<thead><tr><th>情境</th><th>建議值</th><th>理由</th></tr></thead>
+<tbody>
+<tr><td>分類 / 抽取少量欄位</td><td><code>256</code> – <code>1024</code></td><td>輸出本來就短，設小省錢又快</td></tr>
+<tr><td>本課的申訴分類 JSON</td><td><code>1024</code> – <code>2048</code></td><td>夠寫完整個 JSON 加一段摘要</td></tr>
+<tr><td>一般非串流請求</td><td><code>~16000</code></td><td>SDK 預設 HTTP timeout 下的安全值</td></tr>
+<tr><td>串流請求</td><td><code>~64000</code></td><td>串流不怕 timeout，給模型空間</td></tr>
+</tbody>
+</table>
+</div>
+
+<p>設太小的代價是輸出被截斷要重跑（反而更貴）；設太大的代價只是「允許」它寫長，<strong>實際計費是照真正生成的 token 數</strong>，不是照上限。所以寧可寬鬆一點。</p>
+
+<h3>context window：輸入 + 輸出的總容量</h3>
+
+<p>Context window 是模型一次能「看到」的總 token 數——<strong>system prompt + 整個 messages 歷史 + 這次要生成的輸出</strong>，全部加起來不能超過。</p>
+
+<div class="tw">
+<table>
+<thead><tr><th>模型</th><th>模型 ID</th><th>Context window</th><th>最大輸出</th></tr></thead>
+<tbody>
+<tr><td>Claude Opus 5.5</td><td><code>claude-opus-5-5</code></td><td class="num-c">1M</td><td class="num-c">128K</td></tr>
+<tr><td>Claude Sonnet 5.5</td><td><code>claude-sonnet-5-5</code></td><td class="num-c">1M</td><td class="num-c">128K</td></tr>
+<tr><td>Claude Haiku 4.5</td><td><code>claude-haiku-4-5</code></td><td class="num-c">200K</td><td class="num-c">—</td></tr>
+</tbody>
+</table>
+</div>
+
+<p>1M token 大約是 70 萬字的中文，實務上很難撞到。但<strong>撞到之前你會先被成本嚇到</strong>——送 1M token 進 Opus 5.5 一次就是 4 美金。這是第 6 週要做可觀測性的原因之一。</p>
+
+<h3 id="s4-temp">temperature：這個參數在現行 Claude 模型上已經不存在了</h3>
+
+<div class="box danger">
+  <p class="bt">這是本課最重要的「別照舊教學做」</p>
+  <p>幾乎所有 2024–2025 年的 LLM 教學都會教你用 <code>temperature</code> 控制輸出的隨機性：0 比較固定、1 比較有創意。<strong>在現行的 Claude 模型上，送出 <code>temperature</code> 會直接收到 HTTP 400 錯誤。</strong><code>top_p</code> 和 <code>top_k</code> 也一樣被移除了。</p>
+</div>
+
+<div class="tw">
+<table>
+<thead><tr><th>模型</th><th><code>temperature</code> / <code>top_p</code> / <code>top_k</code></th></tr></thead>
+<tbody>
+<tr><td><code>claude-opus-5-5</code>、<code>claude-opus-5</code></td><td><strong>已移除</strong>，送出回 400</td></tr>
+<tr><td><code>claude-sonnet-5-5</code></td><td><strong>只接受預設值</strong>，給非預設值回 400</td></tr>
+<tr><td><code>claude-haiku-4-5</code></td><td>仍可使用</td></tr>
+<tr><td>OpenAI 的模型</td><td>仍可使用（所以做雙供應商抽象時要注意）</td></tr>
+</tbody>
+</table>
+</div>
+
+<h4>那現在用什麼控制？<code>output_config.effort</code></h4>
+
+<p>新的控制軸不是「隨機性」，是<strong>思考深度與 token 花費</strong>：</p>
+
+<div class="cb" data-lang="python">
+<pre><code>response = client.messages.create(
+    model="claude-opus-5-5",
+    max_tokens=2048,
+    output_config={"effort": "low"},   # low | medium | high | xhigh | max
+    messages=[{"role": "user", "content": complaint_text}],
+)</code></pre>
+</div>
+
+<div class="tw">
+<table>
+<thead><tr><th>effort</th><th>適用</th></tr></thead>
+<tbody>
+<tr><td><code>low</code></td><td>分類、抽取、簡單改寫、子代理。<strong>本課的申訴分類從這裡開始試</strong></td></tr>
+<tr><td><code>medium</code></td><td>需要一點判斷的任務。<code>claude-opus-5-5</code> 的預設值</td></tr>
+<tr><td><code>high</code></td><td>需要推理的工作。<code>claude-sonnet-5-5</code> 的預設值</td></tr>
+<tr><td><code>xhigh</code> / <code>max</code></td><td>困難的程式與長流程代理工作，正確性比成本重要時</td></tr>
+</tbody>
+</table>
+</div>
+
+<div class="box tip">
+  <p class="bt">成本優化的第一個旋鈕</p>
+  <p>很多人想省錢的第一反應是「換成小模型」。但<strong>先試「同一個模型降低 effort」</strong>——新模型在低 effort 下常常還是勝過上一代在高 effort 下的表現，而且維持單一模型有額外好處（prompt cache 是綁模型的，混用模型就無法共用快取）。這也是本週比較表該量的東西之一。</p>
+</div>
+
+<h3>thinking：思考模式</h3>
+
+<p>現行模型的「擴展思考」是<strong>自適應的</strong>，模型自己決定要想多久：</p>
+
+<div class="cb" data-lang="python">
+<pre><code>response = client.messages.create(
+    model="claude-opus-5-5",
+    max_tokens=4096,
+    thinking={"type": "adaptive", "display": "summarized"},
+    output_config={"effort": "high"},
+    messages=[{"role": "user", "content": "這筆交易的錯誤碼 05 代表什麼，該怎麼處理？"}],
+)
+
+for block in response.content:
+    if block.type == "thinking":
+        print("[思考]", block.thinking)
+    elif block.type == "text":
+        print("[回答]", block.text)</code></pre>
+</div>
+
+<div class="box warn">
+  <p class="bt">三個容易踩的點</p>
+  <ul>
+    <li><strong><code>claude-opus-5-5</code> 的思考永遠開著</strong>，不能關。送 <code>{"type": "disabled"}</code> 或 <code>budget_tokens</code> 都會回 400。要少花錢就降低 <code>effort</code>。</li>
+    <li><strong><code>budget_tokens</code> 是舊寫法</strong>。舊教學會教 <code>thinking={"type": "enabled", "budget_tokens": 10000}</code>，在現行模型上一律 400。只有 Haiku 4.5 這類較舊的模型還用這個。</li>
+    <li><strong><code>display</code> 預設是 <code>"omitted"</code></strong>——思考照樣發生、照樣計費，但 <code>block.thinking</code> 會是空字串。想看到摘要要明確寫 <code>"summarized"</code>。如果你在做串流 UI，不設這個會讓使用者看到一段長長的空白才開始有輸出。</li>
+  </ul>
+</div>
+
+<h3>完整的參數對照表</h3>
+
+<div class="tw">
+<table>
+<thead><tr><th>參數</th><th>必填</th><th>說明</th></tr></thead>
+<tbody>
+<tr><td><code>model</code></td><td>是</td><td>模型 ID 字串。<strong>不要自己加日期後綴</strong>，<code>claude-opus-5-5</code> 就是完整的 ID</td></tr>
+<tr><td><code>max_tokens</code></td><td>是</td><td>輸出上限</td></tr>
+<tr><td><code>messages</code></td><td>是</td><td>對話歷史 list</td></tr>
+<tr><td><code>system</code></td><td>否</td><td>系統提示，獨立參數</td></tr>
+<tr><td><code>output_config</code></td><td>否</td><td><code>{"effort": ...}</code> 控制深度、<code>{"format": ...}</code> 約束輸出格式</td></tr>
+<tr><td><code>thinking</code></td><td>否</td><td><code>{"type": "adaptive", "display": "summarized"}</code></td></tr>
+<tr><td><code>tools</code></td><td>否</td><td>工具定義（第 2 週）</td></tr>
+<tr><td><code>stream</code></td><td>否</td><td>低階串流開關，但建議用 <code>messages.stream()</code> 輔助方法</td></tr>
+<tr><td><code>temperature</code></td><td>—</td><td><span class="tag old">已移除</span> 見上方</td></tr>
+<tr><td><code>output_format</code></td><td>—</td><td><span class="tag old">已棄用</span> <code>create()</code> 上的這個參數被 <code>output_config.format</code> 取代了</td></tr>
+</tbody>
+</table>
+</div>
+
+<h2 id="s5"><span class="num">5</span>Structured Output 與 Pydantic</h2>
+
+<p>這是本週的技術核心，也是「能跑的 demo」和「能上線的系統」之間最大的分界線。</p>
+
+<h3>為什麼不能只在 prompt 裡拜託模型</h3>
+
+<p>新手的第一個做法通常是這樣：</p>
+
+<div class="cb" data-lang="python">
+<pre><code># 這個做法會在半夜叫你起來修 bug
+response = client.messages.create(
+    model="claude-opus-5-5",
+    max_tokens=1024,
+    system="請用 JSON 格式回答，包含 complaint_type、amount、urgency 三個欄位。",
+    messages=[{"role": "user", "content": complaint}],
+)
+data = json.loads(response.content[0].text)   # 💥</code></pre>
+</div>
+
+<p>這在 95% 的情況會成功，然後在剩下 5% 用各種方式失敗：</p>
+
+<ul>
+  <li>模型在 JSON 前後加了說明文字：<code>好的，以下是分析結果：{...}</code></li>
+  <li>包在 markdown 程式碼區塊裡：<code>```json\n{...}\n```</code></li>
+  <li>欄位名稱自己換了：<code>type</code> 而不是 <code>complaint_type</code></li>
+  <li><code>amount</code> 回傳字串 <code>"3280"</code> 而不是數字 <code>3280</code></li>
+  <li><code>urgency</code> 回傳 <code>"很高"</code> 而不是你預期的 <code>"high"</code></li>
+  <li>撞到 <code>max_tokens</code> 被截斷，JSON 少了尾巴</li>
+</ul>
+
+<p>而 5% 的失敗率在一個每天處理 1000 筆申訴的系統裡，就是<strong>每天 50 筆錯誤</strong>。</p>
+
+<p>正確的做法有兩層：</p>
+
+<ol>
+  <li><strong>用 schema 從 API 層面約束輸出</strong>——讓「不合法的 JSON」在生成階段就不可能發生。</li>
+  <li><strong>用 Pydantic 在程式裡驗證</strong>——確保欄位齊全、型別正確、值在允許範圍內，失敗就重試。</li>
+</ol>
+
+<h3 id="s5-pydantic">Pydantic 是什麼</h3>
+
+<p>Pydantic 把<a href="#s2-hint">第 2 節</a>講的型別註解變成<strong>真正會執行的驗證</strong>。你用熟悉的 class 語法描述資料長什麼樣，它負責檢查、轉換、和報錯。</p>
+
+<div class="anno">
+<div class="anno-head">Pydantic 的基本結構 · 點標記看說明</div>
+<div class="cb" data-lang="python" data-anno="4">
+<pre><code>from pydantic import BaseModel, Field, ValidationError
+
+class Complaint(BaseModel):
+    complaint_type: str
+    amount: float = Field(ge=0)
+    urgency: str = "medium"
+    note: str | None = None
+
+c = Complaint(complaint_type="duplicate_charge", amount="3280")
+print(c.amount)        # 3280.0  —— 字串被自動轉成 float
+print(c.urgency)       # "medium"  —— 用了預設值
+print(c.model_dump())  # 轉回 dict</code></pre>
+</div>
+<div class="notes">
+  <div class="note" data-line="3"><div class="note-n">1</div><div>繼承 <code>BaseModel</code> 就得到驗證能力。類別名稱用大駝峰是 Python 慣例。</div></div>
+  <div class="note" data-line="4"><div class="note-n">2</div><div>最單純的欄位：<strong>名稱 + 型別</strong>。沒有預設值表示<strong>必填</strong>，缺了就丟 <code>ValidationError</code>。</div></div>
+  <div class="note" data-line="5"><div class="note-n">3</div><div><code>Field(ge=0)</code> 加額外約束，<code>ge</code> 是 greater-or-equal。常用的還有 <code>gt</code>、<code>le</code>、<code>lt</code>、<code>min_length</code>、<code>max_length</code>、<code>pattern</code>（正規表示式）。這也是放欄位說明的地方，等一下會用到。</div></div>
+  <div class="note" data-line="6"><div class="note-n">4</div><div>有預設值 = <strong>選填</strong>。模型沒給就用 <code>"medium"</code>。</div></div>
+  <div class="note" data-line="7"><div class="note-n">5</div><div><code>str | None = None</code> 表示「可以是字串也可以是 None，預設 None」。這是表達「這個欄位可能沒有值」的標準寫法。</div></div>
+  <div class="note" data-line="9"><div class="note-n">6</div><div>注意這裡傳的是<strong>字串</strong> <code>"3280"</code>，但 Pydantic 看到欄位型別是 <code>float</code>，<strong>自動幫你轉成 <code>3280.0</code></strong>。這解決了前面列的「amount 回傳字串」問題。</div></div>
+  <div class="note" data-line="12"><div class="note-n">7</div><div><code>model_dump()</code> 把物件轉回普通 dict（要 JSON 字串就用 <code>model_dump_json()</code>）。<strong>注意：Pydantic 1.x 的方法叫 <code>.dict()</code> 和 <code>.json()</code>，2.x 改名了</strong>，舊教學的寫法在新版會有棄用警告。</div></div>
+</div>
+</div>
+
+<h4>驗證失敗時會發生什麼</h4>
+
+<div class="cb" data-lang="python">
+<pre><code>try:
+    Complaint(complaint_type="duplicate_charge", amount=-50)
+except ValidationError as e:
+    print(e)
+# 1 validation error for Complaint
+# amount
+#   Input should be greater than or equal to 0 ...</code></pre>
+</div>
+
+<p><code>ValidationError</code> 的訊息<strong>非常詳細</strong>——它告訴你哪個欄位、為什麼不合格。這點很重要，因為我們等一下要<strong>把這個錯誤訊息餵回模型</strong>讓它自己修正。</p>
+
+<h3 id="s5-schema">設計申訴分類的 schema</h3>
+
+<p>現在來設計本週真正要用的資料結構。這裡每個決定都有理由：</p>
+
+<div class="cb" data-lang="python" data-file="models.py">
+<pre><code>from enum import Enum
+from pydantic import BaseModel, Field
+
+
+class ComplaintType(str, Enum):
+    """申訴類型。用 Enum 而不是自由字串，模型就只能回這幾個值。"""
+    DUPLICATE_CHARGE = "duplicate_charge"      # 重複扣款
+    UNAUTHORIZED = "unauthorized"              # 未授權交易
+    REFUND_NOT_RECEIVED = "refund_not_received"  # 退款未入帳
+    WRONG_AMOUNT = "wrong_amount"              # 金額錯誤
+    FAILED_PAYMENT = "failed_payment"          # 交易失敗
+    OTHER = "other"                            # 其他
+
+
+class Urgency(str, Enum):
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+
+
+class ComplaintAnalysis(BaseModel):
+    """一筆消費者交易申訴的分析結果。"""
+
+    complaint_type: ComplaintType = Field(
+        description="申訴屬於哪一類。無法判斷時用 other。"
+    )
+    amount: float | None = Field(
+        default=None,
+        ge=0,
+        description="申訴涉及的金額。申訴文字沒提到金額時必須為 null，不要猜。",
+    )
+    currency: str | None = Field(
+        default=None,
+        description="三位字母的貨幣代碼，例如 TWD、USD。沒提到就 null。",
+    )
+    urgency: Urgency = Field(
+        description="緊急度。涉及未授權交易或金額超過 10000 時為 high。"
+    )
+    needs_human: bool = Field(
+        description="是否需要轉人工處理。涉及退款、爭議款項時為 true。"
+    )
+    suggested_action: str = Field(
+        max_length=200,
+        description="建議客服執行的下一步，一句話，繁體中文。",
+    )
+    summary: str = Field(
+        max_length=300,
+        description="用一到兩句繁體中文摘要這筆申訴。",
+    )
+    missing_info: list[str] = Field(
+        default_factory=list,
+        description="要處理這筆申訴還缺哪些資訊，例如訂單號、交易時間。沒缺就空陣列。",
+    )</code></pre>
+</div>
+
+<div class="box tip">
+  <p class="bt">三個設計重點，每個都有理由</p>
+  <ul>
+    <li><strong><code>description</code> 是給模型看的，不是給人看的。</strong>它會被翻譯成 JSON Schema 送進 API，模型讀得到。所以這裡要寫得像指令——「沒提到金額時必須為 null，不要猜」比「金額」有用一百倍。這是對抗幻覺最便宜的手段。</li>
+    <li><strong>用 <code>Enum</code> 而不是 <code>str</code>。</strong>這樣模型回不出 <code>"很高"</code> 或 <code>"URGENT"</code>——schema 本身就限制了可能的值，你的下游程式可以放心用 <code>if urgency == Urgency.HIGH</code> 比對。</li>
+    <li><strong><code>missing_info</code> 用 <code>default_factory=list</code> 而不是 <code>= []</code>。</strong>這是 Python 的一個經典陷阱：可變的預設值（list、dict）如果直接寫 <code>= []</code>，<strong>所有實例會共用同一個 list</strong>，一個改到全部都改。Pydantic 會幫你擋下這個寫法，但一般的 Python 函式不會，所以養成習慣。</li>
+  </ul>
+</div>
+
+<h3 id="s5-parse">做法一：<code>messages.parse()</code>（推薦）</h3>
+
+<p>SDK 提供一個輔助方法，把「送 schema 進去 + 驗證回來的 JSON」一次做完：</p>
+
+<div class="anno">
+<div class="anno-head">本週的核心呼叫 · 點標記看說明</div>
+<div class="cb" data-lang="python" data-file="analyze.py" data-anno="5">
+<pre><code>import anthropic
+from models import ComplaintAnalysis
+
+client = anthropic.Anthropic()
+
+SYSTEM = """你是金流客服的申訴分析助手。
+
+規則：
+- 只根據申訴文字中明確提到的資訊填寫欄位，不要推測或補完。
+- 申訴文字沒提到的欄位，留空或填 null。
+- 無法判斷類型時使用 other，不要勉強歸類。"""
+
+
+def analyze(complaint: str) -> ComplaintAnalysis:
+    response = client.messages.parse(
+        model="claude-opus-5-5",
+        max_tokens=2048,
+        system=SYSTEM,
+        output_config={"effort": "low"},
+        messages=[{"role": "user", "content": complaint}],
+        output_format=ComplaintAnalysis,
+    )
+    return response.parsed_output</code></pre>
+</div>
+<div class="notes">
+  <div class="note" data-line="15"><div class="note-n">1</div><div><code>messages.parse()</code> 而不是 <code>messages.create()</code>。它是 <code>create()</code> 的包裝，多做了 schema 轉換和驗證。</div></div>
+  <div class="note" data-line="19"><div class="note-n">2</div><div>分類任務用 <code>low</code> effort 起步，省錢又快。之後跑比較表時可以試不同的值看品質差多少。</div></div>
+  <div class="note" data-line="21"><div class="note-n">3</div><div><strong>這裡的 <code>output_format</code> 是 <code>parse()</code> 的參數，直接傳 Pydantic 類別</strong>——它會自動產生 JSON Schema 送給 API。注意不要跟下面那個已棄用的東西搞混。</div></div>
+  <div class="note" data-line="23"><div class="note-n">4</div><div><code>response.parsed_output</code> 是<strong>已經驗證過的 <code>ComplaintAnalysis</code> 實例</strong>，不是字串也不是 dict。你可以直接 <code>result.urgency</code>、<code>result.amount</code>，編輯器還會自動完成。</div></div>
+</div>
+</div>
+
+<div class="box danger">
+  <p class="bt">兩個 <code>output_format</code> 很容易搞混</p>
+  <ul>
+    <li><code>client.messages.<strong>parse</strong>(..., output_format=MyModel)</code> — <span class="tag new">正確</span> 這是 parse 輔助方法的參數，傳 Pydantic 類別。</li>
+    <li><code>client.messages.<strong>create</strong>(..., output_format=...)</code> — <span class="tag old">已棄用</span> <code>create()</code> 上的這個頂層參數已被 <code>output_config={"format": {...}}</code> 取代。</li>
+  </ul>
+  <p>名字一樣但不是同一個東西。<strong>記住：用 <code>parse()</code> 就傳 <code>output_format=模型類別</code>；用 <code>create()</code> 就寫 <code>output_config={"format": {...}}</code>。</strong></p>
+</div>
+
+<h3>做法二：<code>output_config.format</code> 手寫 schema</h3>
+
+<p>如果你不想用 Pydantic，或需要動態產生 schema：</p>
+
+<div class="cb" data-lang="python">
+<pre><code>import json
+
+response = client.messages.create(
+    model="claude-opus-5-5",
+    max_tokens=2048,
+    messages=[{"role": "user", "content": complaint}],
+    output_config={
+        "format": {
+            "type": "json_schema",
+            "schema": {
+                "type": "object",
+                "properties": {
+                    "complaint_type": {
+                        "type": "string",
+                        "enum": ["duplicate_charge", "unauthorized", "other"],
+                    },
+                    "amount": {"type": ["number", "null"]},
+                    "urgency": {"type": "string", "enum": ["low", "medium", "high"]},
+                },
+                "required": ["complaint_type", "amount", "urgency"],
+                "additionalProperties": False,
+            },
+        }
+    },
+)
+
+# output_config.format 保證第一個 text block 是合法 JSON
+text = next(b.text for b in response.content if b.type == "text")
+data = json.loads(text)</code></pre>
+</div>
+
+<p>其實 <code>parse()</code> 內部就是幫你產生這段 schema。<strong>手寫容易出錯又難維護，除非有特別理由，用 Pydantic。</strong>但知道底層長這樣有助於 debug。</p>
+
+<h3>做法三：strict tool use</h3>
+
+<p>第三種方式是定義一個工具，用 <code>strict: True</code> 保證參數符合 schema：</p>
+
+<div class="cb" data-lang="python">
+<pre><code>tools = [{
+    "name": "record_complaint",
+    "description": "記錄一筆申訴的分析結果",
+    "strict": True,
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "complaint_type": {"type": "string"},
+            "urgency": {"type": "string", "enum": ["low", "medium", "high"]},
+        },
+        "required": ["complaint_type", "urgency"],
+        "additionalProperties": False,
+    },
+}]</code></pre>
+</div>
+
+<div class="tw">
+<table>
+<thead><tr><th>做法</th><th>什麼時候用</th></tr></thead>
+<tbody>
+<tr><td><code>parse()</code> + Pydantic</td><td><strong>只是要拿一份結構化資料</strong>。本課用這個</td></tr>
+<tr><td><code>output_config.format</code></td><td>schema 要在執行時動態組出來，或不想引入 Pydantic</td></tr>
+<tr><td>strict tool use</td><td><strong>模型要「做一件事」而不只是「回一份資料」</strong>，而且可能有多個工具可選。第 2 週的主題</td></tr>
+</tbody>
+</table>
+</div>
+
+<div class="box warn">
+  <p class="bt">不要用 <code>tool_choice</code> 強迫模型呼叫工具</p>
+  <p>舊教學常見的技巧是用 <code>tool_choice={"type": "tool", "name": "..."}</code> 強制模型一定要呼叫某個工具，藉此拿到結構化輸出。<strong>在 <code>claude-opus-5-5</code> 和 <code>claude-sonnet-5-5</code> 上，<code>tool_choice</code> 的 <code>any</code> 和 <code>tool</code> 會回 400。</strong>如果那個強制呼叫本來只是為了拿 JSON，直接改用 structured output 才是對的解法。</p>
+</div>
+
+<h3 id="s5-retry">驗證失敗時重試</h3>
+
+<p>就算有 schema 約束，還是有失敗情境：撞到 <code>max_tokens</code> 被截斷、或是通過了 schema 但違反你的業務規則（例如 <code>amount</code> 是負數）。所以本週的實作任務要求「驗證失敗就重試」。</p>
+
+<p>關鍵技巧是<strong>把 <code>ValidationError</code> 的內容原封不動餵回模型</strong>——它的訊息已經寫得很清楚哪裡錯了：</p>
+
+<div class="cb" data-lang="python" data-file="analyze.py">
+<pre><code>from pydantic import ValidationError
+
+def analyze_with_retry(complaint: str, max_attempts: int = 3) -> ComplaintAnalysis:
+    messages: list[dict] = [{"role": "user", "content": complaint}]
+
+    for attempt in range(1, max_attempts + 1):
+        response = client.messages.parse(
+            model="claude-opus-5-5",
+            max_tokens=2048,
+            system=SYSTEM,
+            output_config={"effort": "low"},
+            messages=messages,
+            output_format=ComplaintAnalysis,
+        )
+
+        # 先檢查是不是被截斷 —— 這會讓 JSON 不完整
+        if response.stop_reason == "max_tokens":
+            raise RuntimeError(
+                f"輸出被 max_tokens 截斷（第 {attempt} 次）。調高 max_tokens。"
+            )
+
+        try:
+            return response.parsed_output
+        except ValidationError as e:
+            if attempt == max_attempts:
+                raise
+
+            # 把模型的錯誤回答和驗證錯誤一起送回去，讓它自己修
+            messages.append({"role": "assistant", "content": response.content})
+            messages.append({
+                "role": "user",
+                "content": (
+                    f"你的回答沒有通過驗證：\n{e}\n\n"
+                    "請依照 schema 重新輸出，只修正出錯的欄位。"
+                ),
+            })
+
+    raise RuntimeError("不會走到這裡")</code></pre>
+</div>
+
+<div class="box tip">
+  <p class="bt">為什麼要把錯誤訊息送回去</p>
+  <p>因為這等於給模型一個<strong>具體的、機器產生的回饋</strong>，而不是含糊的「你錯了請重試」。實務上第二次就成功的比例很高。這個「驗證 → 回饋 → 重試」的迴圈是 LLM 應用的基本模式，第 5 週做 agent 時會用同一個思路處理工具呼叫失敗。</p>
+  <p>注意 <code>messages.append({"role": "assistant", "content": response.content})</code> 存的是<strong>整個 content list</strong>，不是文字——這就是<a href="#s3-stateless">第 3 節</a>提到的穩健寫法。</p>
+</div>
+
+<h2 id="s6"><span class="num">6</span>Streaming：使用者感受到的速度</h2>
+
+<p>一個 LLM 請求要 5 秒才回完。使用者的體感有兩種：</p>
+
+<ul>
+  <li><strong>不串流</strong>：盯著空白畫面 5 秒，然後整段文字一次出現。感覺很慢。</li>
+  <li><strong>串流</strong>：0.4 秒後第一個字出現，然後逐字長出來。感覺很快——<strong>即使總時間完全一樣</strong>。</li>
+</ul>
+
+<p>所以「延遲」要量兩個數字：<strong>TTFT（time to first token，第一個 token 的時間）</strong>和總時間。本週的比較表應該兩個都記。</p>
+
+<h3>基本寫法</h3>
+
+<div class="cb" data-lang="python">
+<pre><code>with client.messages.stream(
+    model="claude-opus-5-5",
+    max_tokens=4096,
+    system=SYSTEM,
+    messages=[{"role": "user", "content": complaint}],
+) as stream:
+    for text in stream.text_stream:
+        print(text, end="", flush=True)</code></pre>
+</div>
+
+<p>兩個細節：</p>
+
+<ul>
+  <li><strong><code>with</code> 是必要的</strong>（<a href="#s2-with">第 2 節</a>講過）——串流是一條網路連線，要保證關閉。</li>
+  <li><strong><code>flush=True</code> 是必要的</strong>。Python 的 <code>print</code> 預設會把輸出先放在緩衝區，攢一批才真的寫出去。不加 <code>flush=True</code> 你會看到文字一塊一塊跳出來，串流的意義就沒了。<code>end=""</code> 則是不要每次都換行。</li>
+</ul>
+
+<h3>量 TTFT</h3>
+
+<div class="cb" data-lang="python" data-file="bench.py">
+<pre><code>import time
+
+start = time.perf_counter()
+ttft = None
+
+with client.messages.stream(
+    model="claude-opus-5-5",
+    max_tokens=4096,
+    messages=[{"role": "user", "content": complaint}],
+) as stream:
+    for text in stream.text_stream:
+        if ttft is None:
+            ttft = time.perf_counter() - start    # 第一個 token 到的時間
+        print(text, end="", flush=True)
+
+    final = stream.get_final_message()            # 拿完整的回傳物件
+
+total = time.perf_counter() - start
+print(f"\n\nTTFT {ttft * 1000:.0f} ms / 總計 {total * 1000:.0f} ms")
+print(f"輸出 {final.usage.output_tokens} tokens")</code></pre>
+</div>
+
+<div class="box tip">
+  <p class="bt"><code>time.perf_counter()</code> 而不是 <code>time.time()</code></p>
+  <p><code>time.time()</code> 回傳的是「牆上時鐘」，會被系統時間調整（NTP 校時、夏令時間）影響，拿來量短時間間隔可能出現負數。<strong>量時間間隔一律用 <code>time.perf_counter()</code></strong>，它是單調遞增的高解析度計時器。</p>
+</div>
+
+<h3><code>get_final_message()</code>：串流也要拿得到完整物件</h3>
+
+<p><code>stream.get_final_message()</code> 回傳的東西和非串流的 <code>create()</code> 一模一樣——有 <code>usage</code>、<code>stop_reason</code>、完整的 <code>content</code>。所以你<strong>不會因為用了串流就失去算成本的能力</strong>。</p>
+
+<p>如果你只是想避開大 <code>max_tokens</code> 的 HTTP timeout、根本不需要逐字顯示，可以這樣寫：</p>
+
+<div class="cb" data-lang="python">
+<pre><code># 用串流傳輸，但不逐字處理，只要最後結果
+with client.messages.stream(model=..., max_tokens=64000, messages=...) as stream:
+    response = stream.get_final_message()</code></pre>
+</div>
+
+<div class="box warn">
+  <p class="bt"><code>max_tokens</code> 很大時必須用串流</p>
+  <p>SDK 的 HTTP timeout 預設 10 分鐘。如果你設 <code>max_tokens=64000</code> 又用非串流的 <code>create()</code>，長輸出可能撞到 timeout 整個失敗。<strong>超過 ~16000 就改用 <code>.stream()</code>。</strong></p>
+</div>
+
+<h3>串流 + 思考模式</h3>
+
+<p>開了 thinking 之後，串流會送出兩種 delta，要分開處理：</p>
+
+<div class="cb" data-lang="python">
+<pre><code>with client.messages.stream(
+    model="claude-opus-5-5",
+    max_tokens=8192,
+    thinking={"type": "adaptive", "display": "summarized"},
+    messages=[{"role": "user", "content": question}],
+) as stream:
+    for event in stream:
+        if event.type == "content_block_start":
+            if event.content_block.type == "thinking":
+                print("\n[思考中…]\n")
+            elif event.content_block.type == "text":
+                print("\n[回答]\n")
+        elif event.type == "content_block_delta":
+            if event.delta.type == "thinking_delta":
+                print(event.delta.thinking, end="", flush=True)
+            elif event.delta.type == "text_delta":
+                print(event.delta.text, end="", flush=True)</code></pre>
+</div>
+
+<p>注意這裡迭代的是 <code>stream</code> 本身（拿到事件物件），而不是 <code>stream.text_stream</code>（只拿文字）。<strong>要細緻控制就迭代 <code>stream</code>，只要文字就用 <code>text_stream</code>。</strong></p>
+
+<h2 id="s7"><span class="num">7</span>Token、計價與成本計算</h2>
+
+<h3><code>usage</code> 欄位</h3>
+
+<div class="cb" data-lang="python">
+<pre><code>u = response.usage
+
+u.input_tokens                 # 送進去的 token（未命中快取的部分）
+u.output_tokens                # 生成的 token
+u.cache_creation_input_tokens  # 寫入快取的 token（約 1.25 倍價）
+u.cache_read_input_tokens      # 從快取讀的 token（約 0.1 倍價）</code></pre>
+</div>
+
+<p>後兩個欄位是 prompt caching 用的，第 2 週會學。本週先把前兩個記下來。</p>
+
+<h3>現行模型價格</h3>
+
+<div class="tw">
+<table>
+<thead><tr><th>模型</th><th>Input（每 1M token）</th><th>Output（每 1M token）</th><th>定位</th></tr></thead>
+<tbody>
+<tr><td><code>claude-opus-5-5</code></td><td class="num-c">$4.00</td><td class="num-c">$20.00</td><td>最強，困難推理與長流程代理</td></tr>
+<tr><td><code>claude-sonnet-5-5</code></td><td class="num-c">$2.00</td><td class="num-c">$10.00</td><td>日常開發與量大的生產流量</td></tr>
+<tr><td><code>claude-haiku-4-5</code></td><td class="num-c">$1.00</td><td class="num-c">$5.00</td><td>簡單、重視速度的任務</td></tr>
+</tbody>
+</table>
+</div>
+
+<p class="small">價格為 2026 年 9 月的 Anthropic 第一方 API 費率。<strong>Output 比 Input 貴 5 倍</strong>——這是成本優化最重要的直覺：讓模型少講話比讓它少讀東西有效得多。</p>
+
+<div class="calc" id="calc">
+  <div class="calc-head">成本計算器 · 用你自己的數字試算</div>
+  <div class="calc-body">
+    <div class="fields">
+      <div class="f">
+        <label for="c-model">模型</label>
+        <select id="c-model">
+          <option value="4,20" selected>claude-opus-5-5</option>
+          <option value="2,10">claude-sonnet-5-5</option>
+          <option value="1,5">claude-haiku-4-5</option>
+        </select>
+      </div>
+      <div class="f">
+        <label for="c-in">每次 input token</label>
+        <input id="c-in" type="number" min="0" step="100" value="800">
+      </div>
+      <div class="f">
+        <label for="c-out">每次 output token</label>
+        <input id="c-out" type="number" min="0" step="50" value="300">
+      </div>
+      <div class="f">
+        <label for="c-n">呼叫次數</label>
+        <input id="c-n" type="number" min="1" step="100" value="1000">
+      </div>
+    </div>
+    <div class="calc-out">
+      <div class="tw"><table>
+        <thead><tr><th>項目</th><th class="num-c">Token</th><th class="num-c">單價 /1M</th><th class="num-c">小計 (USD)</th></tr></thead>
+        <tbody>
+          <tr><td>Input</td><td class="num-c" id="o-it">—</td><td class="num-c" id="o-ip">—</td><td class="num-c" id="o-ic">—</td></tr>
+          <tr><td>Output</td><td class="num-c" id="o-ot">—</td><td class="num-c" id="o-op">—</td><td class="num-c" id="o-oc">—</td></tr>
+        </tbody>
+      </table></div>
+      <div class="tot"><span>總計 · <span id="o-n">—</span> 次呼叫</span><b id="o-total">—</b></div>
+      <div class="tot" style="margin-top:.3rem;padding-top:.3rem;border:0"><span class="small">單次平均</span><span class="small" style="font-family:var(--mono)" id="o-each">—</span></div>
+      <p class="note-s">預設值是本課申訴分析的粗略規模：system prompt 加申訴文字約 800 token、JSON 輸出約 300 token。改成你實測的數字，這張表就是比較表裡「每千次成本」那一欄。</p>
+    </div>
+  </div>
+</div>
+
+<h3>把量測寫進程式</h3>
+
+<p>本週產出要有比較表，所以從一開始就把量測寫成函式，不要事後補：</p>
+
+<div class="cb" data-lang="python" data-file="bench.py">
+<pre><code>import time
+from dataclasses import dataclass
+
+# 每 1M token 的價格（USD）
+PRICING = {
+    "claude-opus-5-5":   {"in": 4.00, "out": 20.00},
+    "claude-sonnet-5-5": {"in": 2.00, "out": 10.00},
+    "claude-haiku-4-5":  {"in": 1.00, "out":  5.00},
+}
+
+
+@dataclass
+class CallResult:
+    """一次呼叫的量測結果。"""
+    model: str
+    input_tokens: int
+    output_tokens: int
+    latency_ms: float
+    cost_usd: float
+    output: ComplaintAnalysis | None
+    error: str | None = None
+
+
+def cost_of(model: str, input_tokens: int, output_tokens: int) -> float:
+    p = PRICING[model]
+    return (input_tokens * p["in"] + output_tokens * p["out"]) / 1_000_000
+
+
+def measured_analyze(model: str, complaint: str) -> CallResult:
+    start = time.perf_counter()
+    try:
+        response = client.messages.parse(
+            model=model,
+            max_tokens=2048,
+            system=SYSTEM,
+            messages=[{"role": "user", "content": complaint}],
+            output_format=ComplaintAnalysis,
+        )
+    except Exception as e:
+        return CallResult(
+            model=model, input_tokens=0, output_tokens=0,
+            latency_ms=(time.perf_counter() - start) * 1000,
+            cost_usd=0.0, output=None, error=f"{type(e).__name__}: {e}",
+        )
+
+    latency_ms = (time.perf_counter() - start) * 1000
+    u = response.usage
+    return CallResult(
+        model=model,
+        input_tokens=u.input_tokens,
+        output_tokens=u.output_tokens,
+        latency_ms=latency_ms,
+        cost_usd=cost_of(model, u.input_tokens, u.output_tokens),
+        output=response.parsed_output,
+    )</code></pre>
+</div>
+
+<div class="box py">
+  <p class="bt"><code>@dataclass</code> 是什麼</p>
+  <p>它幫你自動產生 <code>__init__</code>、<code>__repr__</code> 這些樣板程式碼。<code>@dataclass</code> 和 Pydantic 的 <code>BaseModel</code> 很像，差別是：<strong><code>@dataclass</code> 不做驗證</strong>（只是方便的資料容器），Pydantic 會驗證。</p>
+  <p>所以原則是：<strong>資料來自外部（LLM、API、使用者輸入）就用 Pydantic；資料是你自己程式內部算出來的就用 <code>@dataclass</code>。</strong>上面的 <code>CallResult</code> 是我們自己算的，不需要驗證。</p>
+</div>
+
+<h3>為什麼開發時要用小模型</h3>
+
+<p>你在開發階段會跑同一組測試幾十次。假設你的 10 筆測試每次呼叫 input 800 / output 300 token：</p>
+
+<div class="tw">
+<table>
+<thead><tr><th></th><th class="num-c">跑一輪 10 筆</th><th class="num-c">跑 50 輪</th></tr></thead>
+<tbody>
+<tr><td><code>claude-opus-5-5</code></td><td class="num-c">$0.092</td><td class="num-c">$4.60</td></tr>
+<tr><td><code>claude-haiku-4-5</code></td><td class="num-c">$0.023</td><td class="num-c">$1.15</td></tr>
+</tbody>
+</table>
+</div>
+
+<p>金額都不大，但這只是第 1 週、10 筆測試。到第 6 週你會有 20 個端到端情境、每個情境裡 agent 會呼叫模型好幾次，而且每改一次 prompt 就要全部重跑。<strong>到那時這個比例會變成有感的差距，所以現在就養成習慣：開發和跑迴歸測試用小模型，只在做品質比較時才呼叫大模型。</strong></p>
+
+<h2 id="s8"><span class="num">8</span>錯誤處理與重試</h2>
+
+<h3>先知道 SDK 已經幫你做了什麼</h3>
+
+<div class="box tip">
+  <p class="bt">不要急著自己寫 backoff</p>
+  <p><strong>Anthropic 的 Python SDK 預設就會自動重試</strong>連線錯誤、408、409、429 和 5xx，而且用的就是指數退避。預設重試 2 次。</p>
+  <p>所以第一步不是寫重試邏輯，是<strong>把內建的次數調成你想要的</strong>：</p>
+</div>
+
+<div class="cb" data-lang="python">
+<pre><code># 在客戶端層級設定
+client = anthropic.Anthropic(max_retries=5, timeout=30.0)
+
+# 或針對單一呼叫覆寫，不動到 client
+response = client.with_options(max_retries=1).messages.create(...)
+
+# max_retries=0 完全關閉自動重試（想自己完全控制時）
+client = anthropic.Anthropic(max_retries=0)</code></pre>
+</div>
+
+<div class="box warn">
+  <p class="bt">timeout 會乘上重試次數</p>
+  <p>Timeout 本身也算可重試的錯誤。所以最壞情況的總等待時間是 <code>timeout × (max_retries + 1)</code>。<code>timeout=30, max_retries=5</code> 代表最久可能卡 3 分鐘。做 CLI 或 API 服務時要把這個算進去。</p>
+</div>
+
+<h3>例外類別：從最specific到最general</h3>
+
+<div class="cb" data-lang="python">
+<pre><code>import anthropic
+
+try:
+    response = client.messages.create(...)
+
+except anthropic.BadRequestError as e:
+    # 400 —— 你的請求有問題。重試一萬次也一樣。
+    # 常見原因：送了 temperature、budget_tokens、用了不存在的參數
+    print(f"請求格式錯誤：{e.message}")
+    raise
+
+except anthropic.AuthenticationError:
+    # 401 —— API key 錯了或沒設。不要重試。
+    print("API key 無效，檢查 .env 和環境變數")
+    raise
+
+except anthropic.NotFoundError:
+    # 404 —— 模型 ID 打錯了。不要重試。
+    print("模型 ID 不存在，檢查有沒有多加日期後綴")
+    raise
+
+except anthropic.RateLimitError as e:
+    # 429 —— 超過速率限制。可以重試，而且伺服器告訴你要等多久。
+    retry_after = int(e.response.headers.get("retry-after", "60"))
+    print(f"觸發速率限制，{retry_after} 秒後重試")
+
+except anthropic.APIStatusError as e:
+    # 其他有 HTTP 狀態碼的錯誤
+    if e.status_code >= 500:
+        print(f"伺服器錯誤 {e.status_code}，可以重試")
+    else:
+        print(f"客戶端錯誤 {e.status_code}，不該重試：{e.message}")
+        raise
+
+except anthropic.APIConnectionError:
+    # 根本沒連上 —— 網路問題。可以重試。
+    print("連線失敗，檢查網路")</code></pre>
+</div>
+
+<div class="box danger">
+  <p class="bt">不要只 catch 一個大類別</p>
+  <p>很多人圖方便寫 <code>except anthropic.APIStatusError:</code> 就打包全部。這會<strong>把「該重試的」和「重試一萬次也沒用的」混在一起</strong>——你的程式會對著一個 400 錯誤重試五次、等三十秒，然後回報同一個錯。</p>
+  <p>記住這個分界：<strong>429 和 5xx 和連線錯誤可以重試；其他 4xx 是你的 bug，要讓它爆出來。</strong></p>
+</div>
+
+<h3>自己寫指數退避（當內建的不夠用時）</h3>
+
+<p>實作任務要求你加上錯誤重試，而且要理解它的原理。這是標準寫法：</p>
+
+<div class="anno">
+<div class="anno-head">指數退避 + jitter · 點標記看說明</div>
+<div class="cb" data-lang="python" data-file="retry.py" data-anno="6">
+<pre><code>import random
+import time
+import anthropic
+
+
+def call_with_retry(
+    client: anthropic.Anthropic,
+    max_attempts: int = 5,
+    base_delay: float = 1.0,
+    max_delay: float = 60.0,
+    **kwargs,
+):
+    last_error: Exception | None = None
+
+    for attempt in range(max_attempts):
+        try:
+            return client.messages.create(**kwargs)
+
+        except anthropic.RateLimitError as e:
+            last_error = e
+        except anthropic.APIConnectionError as e:
+            last_error = e
+        except anthropic.APIStatusError as e:
+            if e.status_code &lt; 500:
+                raise
+            last_error = e
+
+        if attempt == max_attempts - 1:
+            break
+
+        backoff = base_delay * (2 ** attempt)
+        jitter = random.uniform(0, 1)
+        delay = min(backoff + jitter, max_delay)
+        print(f"第 {attempt + 1}/{max_attempts} 次失敗，{delay:.1f} 秒後重試")
+        time.sleep(delay)
+
+    raise last_error</code></pre>
+</div>
+<div class="notes">
+  <div class="note" data-line="11"><div class="note-n">1</div><div><code>**kwargs</code> 把所有其他關鍵字參數打包成 dict，原封不動傳給 <code>messages.create()</code>。這樣這個包裝函式不需要知道有哪些參數，<code>create()</code> 加新參數也不用改它。</div></div>
+  <div class="note" data-line="24"><div class="note-n">2</div><div>只有<strong>可重試</strong>的錯誤才記下來繼續；4xx（除了 429）直接 <code>raise</code> 往外丟，不浪費時間。</div></div>
+  <div class="note" data-line="31"><div class="note-n">3</div><div><code>2 ** attempt</code> 是<strong>指數</strong>退避的核心：等待時間變成 1、2、4、8、16 秒。為什麼要指數成長？因為如果伺服器正在過載，固定間隔的重試只會<strong>持續加重它的負擔</strong>。</div></div>
+  <div class="note" data-line="32"><div class="note-n">4</div><div><code>random.uniform(0, 1)</code> 是 <strong>jitter（抖動）</strong>，加一點隨機。沒有它的話，同時失敗的 100 個請求會<strong>在完全同一秒一起重試</strong>，造成新的尖峰，然後一起再失敗——這叫 thundering herd（驚群效應）。加一點隨機就能把它們打散。</div></div>
+  <div class="note" data-line="33"><div class="note-n">5</div><div><code>min(..., max_delay)</code> 設上限，不然第 10 次重試要等 1024 秒。</div></div>
+  <div class="note" data-line="29"><div class="note-n">6</div><div>注意這裡用 <code>break</code> 而不是在迴圈裡 sleep——<strong>最後一次失敗後不需要再等</strong>，直接丟出例外。這是很常見的 off-by-one bug。</div></div>
+</div>
+</div>
+
+<div class="box tip">
+  <p class="bt">如果錯誤回應裡有 <code>retry-after</code>，優先用它</p>
+  <p>429 回應的 header 通常有 <code>retry-after</code>，那是<strong>伺服器告訴你的準確等待時間</strong>，比你自己算的指數退避精準。有就用它，沒有才退回自己算。</p>
+</div>
+
+<h2 id="s9"><span class="num">9</span>雙供應商切換</h2>
+
+<p>實作任務要求「同一支程式可切換供應商」。這不只是練習——<strong>它是你在面試時能回答「你怎麼決定用哪個模型」的基礎</strong>，而且第 6 週要「用測試結果決定要不要換模型」時，這個抽象層就是前提。</p>
+
+<h3>設計原則：抽象「你的需求」，不要抽象「API 的全部功能」</h3>
+
+<div class="box warn">
+  <p class="bt">新手最常見的過度設計</p>
+  <p>不要試著做一個「支援所有供應商所有參數」的通用包裝層。各家的參數差異很大（例如 <strong>Claude 現行模型沒有 <code>temperature</code>，OpenAI 有</strong>），硬要統一只會做出一個到處都是 <code>if provider == ...</code> 的怪物。</p>
+  <p><strong>正確做法是定義「你的應用需要什麼」</strong>——在這個專案裡就是「給我一段申訴文字，回我一個驗證過的 <code>ComplaintAnalysis</code>」。介面就這麼窄，各家自己想辦法滿足它。</p>
+</div>
+
+<div class="cb" data-lang="python" data-file="providers.py">
+<pre><code>from typing import Protocol
+
+
+class Analyzer(Protocol):
+    """申訴分析器的介面。任何供應商只要能做到這件事就能插進來。"""
+
+    name: str
+
+    def analyze(self, complaint: str) -> CallResult:
+        ...
+
+
+class ClaudeAnalyzer:
+    def __init__(self, model: str = "claude-opus-5-5"):
+        self.name = model
+        self.model = model
+        self.client = anthropic.Anthropic(max_retries=3)
+
+    def analyze(self, complaint: str) -> CallResult:
+        start = time.perf_counter()
+        response = self.client.messages.parse(
+            model=self.model,
+            max_tokens=2048,
+            system=SYSTEM,
+            output_config={"effort": "low"},
+            messages=[{"role": "user", "content": complaint}],
+            output_format=ComplaintAnalysis,
+        )
+        u = response.usage
+        return CallResult(
+            model=self.model,
+            input_tokens=u.input_tokens,
+            output_tokens=u.output_tokens,
+            latency_ms=(time.perf_counter() - start) * 1000,
+            cost_usd=cost_of(self.model, u.input_tokens, u.output_tokens),
+            output=response.parsed_output,
+        )
+
+
+class OpenAIAnalyzer:
+    """OpenAI 版本。參數名稱和結構化輸出的做法都不一樣，
+    但對外只露出同一個 analyze() —— 這就是抽象層的價值。
+    具體的參數名稱請查 OpenAI 官方文件，各家 SDK 的 API 變動都很快。"""
+
+    def __init__(self, model: str):
+        self.name = model
+        self.model = model
+        self.client = openai.OpenAI()
+
+    def analyze(self, complaint: str) -> CallResult:
+        ...  # 見下方說明</code></pre>
+</div>
+
+<div class="box py">
+  <p class="bt"><code>Protocol</code> 是什麼</p>
+  <p><code>Protocol</code> 是 Python 的「結構化型別」機制，概念接近 Go 的 interface 或 TypeScript 的 interface：<strong>你不需要明確繼承它</strong>，只要你的類別剛好有 <code>name</code> 屬性和 <code>analyze()</code> 方法，型別檢查工具就認定它符合 <code>Analyzer</code>。</p>
+  <p>這和 C# 的 <code>interface</code> 不同——C# 要寫 <code>class Foo : IAnalyzer</code>，Python 的 <code>Protocol</code> 只看「長得像不像」（鴨子型別的靜態檢查版本）。</p>
+</div>
+
+<h3>然後比較就變得很簡單</h3>
+
+<div class="cb" data-lang="python" data-file="compare.py">
+<pre><code>ANALYZERS = [
+    ClaudeAnalyzer("claude-opus-5-5"),
+    ClaudeAnalyzer("claude-haiku-4-5"),
+    OpenAIAnalyzer("..."),          # 填你要測的 OpenAI 模型
+]
+
+COMPLAINTS = [...]                   # 你的 10 筆假申訴
+
+for analyzer in ANALYZERS:
+    results = [analyzer.analyze(c) for c in COMPLAINTS]
+    ok = [r for r in results if r.error is None]
+
+    avg_latency = sum(r.latency_ms for r in ok) / len(ok)
+    total_cost = sum(r.cost_usd for r in ok)
+    cost_per_1k = total_cost / len(ok) * 1000
+
+    print(f"{analyzer.name:24} "
+          f"成功 {len(ok)}/{len(results)}  "
+          f"平均 {avg_latency:7.0f} ms  "
+          f"每千次 ${cost_per_1k:.2f}")</code></pre>
+</div>
+
+<div class="box warn">
+  <p class="bt">OpenAI 的模型 ID 和價格請自己查</p>
+  <p>這份教材的 Claude 部分是對照官方 SDK 文件寫的，<strong>但 OpenAI 的模型 ID 和定價我沒有在這裡列出，因為我手上沒有可信的即時來源，而寫錯的價格會讓你整張比較表失去意義</strong>。請去 OpenAI 的 pricing 頁面查當前的模型與費率，照 <code>PRICING</code> 那個 dict 的格式補上。</p>
+  <p>這本身也是一個該養成的習慣：<strong>比較表裡的每個數字都要有來源</strong>。面試時被問「這個成本怎麼算的」，你要答得出來。</p>
+</div>
+
+<h3>品質怎麼比？</h3>
+
+<p>延遲和成本是客觀數字，直接量就有。品質比較麻煩，本週先用最簡單的方式：</p>
+
+<ol>
+  <li><strong>先量「有沒有通過驗證」</strong>——這是免費的客觀指標。10 筆裡有幾筆第一次就產生合法的 <code>ComplaintAnalysis</code>？需要重試幾次？</li>
+  <li><strong>再人工看關鍵欄位</strong>——10 筆的 <code>complaint_type</code> 和 <code>urgency</code> 自己標準答案，算準確率。10 筆用手看很快。</li>
+  <li><strong>記下不一致的案例</strong>——哪一筆各家答得不一樣？為什麼？這份筆記在第 4 週建黃金測試集時會直接變成素材。</li>
+</ol>
+
+<div class="box tip">
+  <p class="bt">現在不要做 LLM-as-judge</p>
+  <p>你可能會想「用另一個模型來評分不是更快嗎」。會，但<strong>在你還沒有人工標註的基準之前，你無法知道那個評分器本身準不準</strong>。第 4 週和第 6 週會正式學怎麼建立並校準評分器。本週 10 筆手工看，建立你自己對「什麼叫好的輸出」的感覺——這個感覺後面是用來校準評分器的。</p>
+</div>
+
+<h2 id="s10"><span class="num">10</span>Ollama：本地模型對照</h2>
+
+<p>這一項在 4 週衝刺版裡列為「可先延後」，但如果你有時間，它很值得做，理由有三個：</p>
+
+<ul>
+  <li><strong>成本是零</strong>，可以無限次實驗，不怕燒錢。</li>
+  <li><strong>資料不出本機</strong>——以你的金流背景，「哪些任務可以用本地模型避免資料外送」是個很有說服力的面試話題。</li>
+  <li><strong>親身體會能力差距</strong>。看到一個 7B 的本地模型在同一組測試上表現如何，你對「什麼任務需要大模型」會有實感，而不只是背答案。</li>
+</ul>
+
+<div class="cb" data-lang="bash" data-file="終端機">
+<pre><code># 安裝
+brew install ollama
+
+# 啟動服務（會在背景跑，監聽 11434 port）
+ollama serve
+
+# 另開一個終端機，下載一個模型
+ollama pull qwen2.5:7b          # 中文表現相對好的選擇
+
+# 先用互動模式試試看
+ollama run qwen2.5:7b</code></pre>
+</div>
+
+<p>Ollama 提供一個與 OpenAI 相容的端點，所以你可以直接用 <code>openai</code> SDK 連它——不需要第三個 SDK：</p>
+
+<div class="cb" data-lang="python">
+<pre><code>import openai
+
+local = openai.OpenAI(
+    base_url="http://localhost:11434/v1",
+    api_key="ollama",                  # 本地不驗證，但 SDK 要求有值
+)
+
+response = local.chat.completions.create(
+    model="qwen2.5:7b",
+    messages=[
+        {"role": "system", "content": SYSTEM},
+        {"role": "user", "content": complaint},
+    ],
+)</code></pre>
+</div>
+
+<div class="box warn">
+  <p class="bt">預期本地小模型在 structured output 上會比較吃力</p>
+  <p>這是<strong>預期行為，不是你做錯了</strong>。7B 等級的模型對 JSON Schema 的遵循度明顯較差，常見狀況是欄位名稱漂移、enum 值自己發明、或在 JSON 前後加解釋文字。</p>
+  <p>這正是這個練習的價值：<strong>把「它在哪些地方失敗」記下來</strong>。這份筆記直接回答了一個很實際的工程問題——哪些任務可以下放給便宜/本地的模型，哪些不行。這比「本地模型比較笨」這種空泛結論有用得多。</p>
+</div>
+
+<h2 id="s11"><span class="num">11</span>本週實作任務</h2>
+
+<p>勾選狀態會存在這台瀏覽器裡，關掉頁面不會消失。</p>
+
+<div class="tasks" id="tasks">
+  <div class="tasks-head">
+    <b>第 1 週檢核表</b>
+    <span class="bar"><i id="taskBar"></i></span>
+    <span class="pc" id="taskPc">0 / 10</span>
+  </div>
+  <div class="task"><input type="checkbox" id="t1"><label for="t1">用 uv 建好 Python 3.12 專案，<code>uv run python -c "import anthropic"</code> 不報錯<span class="hint">§1 · 包含 <code>.env</code> 和 <code>.env.example</code>，並確認 <code>git check-ignore .env</code> 有擋住</span></label></div>
+  <div class="task"><input type="checkbox" id="t2"><label for="t2">申請 Claude 與 OpenAI API key，<strong>兩家後台都設好用量上限</strong><span class="hint">§1 · 這一項不要跳過</span></label></div>
+  <div class="task"><input type="checkbox" id="t3"><label for="t3">寫出 <code>ComplaintAnalysis</code> 的 Pydantic 模型，每個欄位都有 <code>description</code><span class="hint">§5 · description 是給模型看的指令，不是註解</span></label></div>
+  <div class="task"><input type="checkbox" id="t4"><label for="t4">CLI 能吃一段申訴文字，輸出通過驗證的 JSON<span class="hint">§5 · 用 <code>messages.parse()</code> + <code>output_format=ComplaintAnalysis</code></span></label></div>
+  <div class="task"><input type="checkbox" id="t5"><label for="t5">加上驗證失敗重試：把 <code>ValidationError</code> 餵回模型讓它自己修<span class="hint">§5 · 同時要檢查 <code>stop_reason == "max_tokens"</code></span></label></div>
+  <div class="task"><input type="checkbox" id="t6"><label for="t6">加上 streaming 輸出，並量出 TTFT 與總延遲<span class="hint">§6 · 記得 <code>flush=True</code> 和 <code>time.perf_counter()</code></span></label></div>
+  <div class="task"><input type="checkbox" id="t7"><label for="t7">加上錯誤重試：先設 <code>max_retries</code>，再處理 SDK 不管的情況<span class="hint">§8 · 例外要從最 specific 往 general 排，4xx 不要重試</span></label></div>
+  <div class="task"><input type="checkbox" id="t8"><label for="t8">寫 10 筆假申訴，涵蓋重複扣款、未授權、退款未入帳、資訊不足、以及<strong>一筆根本不是申訴的雜訊</strong><span class="hint">§9 · 最後那筆是測模型會不會老實回 other 而不是硬分類</span></label></div>
+  <div class="task"><input type="checkbox" id="t9"><label for="t9">做出供應商抽象層，同一支比較腳本能跑 Claude 與 OpenAI<span class="hint">§9 · 介面只露出 <code>analyze()</code>，不要試著統一所有參數</span></label></div>
+  <div class="task"><input type="checkbox" id="t10"><label for="t10">產出三模型比較表：品質 / 延遲（TTFT + 總計）/ 每千次成本<span class="hint">§7 §9 · 每個數字都要說得出怎麼算的</span></label></div>
+</div>
+
+<h3>加分項（有餘力再做）</h3>
+
+<div class="tasks" id="tasks2">
+  <div class="tasks-head">
+    <b>加分</b>
+    <span class="bar"><i id="taskBar2"></i></span>
+    <span class="pc" id="taskPc2">0 / 4</span>
+  </div>
+  <div class="task"><input type="checkbox" id="b1"><label for="b1">用 Ollama 跑本地模型，用同一組 10 筆做對照<span class="hint">§10 · 重點是記下它在哪些地方失敗</span></label></div>
+  <div class="task"><input type="checkbox" id="b2"><label for="b2">用 <code>asyncio.gather</code> 改寫比較腳本，10 筆並行跑<span class="hint">§2 · 從 30 秒變 3 秒</span></label></div>
+  <div class="task"><input type="checkbox" id="b3"><label for="b3">同一個模型試 <code>effort</code> 的 low / medium / high，看品質與成本的曲線<span class="hint">§4 · 這比換模型更常是正確的省錢做法</span></label></div>
+  <div class="task"><input type="checkbox" id="b4"><label for="b4">把比較腳本的輸出寫成 CSV 或 markdown 表格，直接進 README<span class="hint">§11 · 第 8 週要用</span></label></div>
+</div>
+
+<div class="deliver">
+  <p class="bt">驗收標準</p>
+  <p>週日 commit 前問自己三個問題，三個都能回答才算完成：</p>
+  <ol>
+    <li>我能說出<strong>這支 CLI 處理一筆申訴花了多少錢、等了多久</strong>，而且數字是量出來的不是估的嗎？</li>
+    <li>如果模型回了不合 schema 的東西，<strong>我的程式會怎麼處理</strong>？我試過這個情境嗎？</li>
+    <li>三個模型我會<strong>選哪一個上線</strong>，理由是什麼？這個理由有數字支撐嗎？</li>
+  </ol>
+  <p class="small" style="margin-top:.7rem">別忘了寫 3 行學習筆記再 commit。</p>
+</div>
+
+<h2 id="s12"><span class="num">12</span>自我檢核</h2>
+
+<p>這些都是面試會問的。先自己想過再看答案。</p>
+
+<div class="quiz" id="quiz">
+  <div class="q">
+    <div class="q-q"><span class="qn">1</span><span>為什麼 LLM API 的多輪對話要自己維護 messages 陣列？這對成本有什麼影響？</span></div>
+    <button class="q-btn">看答案</button>
+    <div class="q-a"><div class="ans">
+      <p>因為 API 是<strong>無狀態的</strong>——伺服器不記得前一次請求。「連續對話」是客戶端每次把完整歷史重送造成的效果。</p>
+      <p>成本影響：對話越長，每次請求的 input token 越多，<strong>成本隨對話長度成長</strong>（而且是每一輪都付一次完整歷史的錢）。這就是 prompt caching 存在的理由——把不變的前綴快取起來，重複讀取只要約 0.1 倍價格。</p>
+    </div></div>
+  </div>
+  <div class="q">
+    <div class="q-q"><span class="qn">2</span><span>你照著某篇 2025 年的教學寫了 <code>temperature=0</code>，結果收到 400 錯誤。發生什麼事？現在該用什麼？</span></div>
+    <button class="q-btn">看答案</button>
+    <div class="q-a"><div class="ans">
+      <p><code>temperature</code>（以及 <code>top_p</code>、<code>top_k</code>）在現行 Claude 模型上<strong>已經移除</strong>，送出會被拒絕。<code>claude-opus-5-5</code> 和 <code>claude-opus-5</code> 直接 400；<code>claude-sonnet-5-5</code> 只接受預設值。</p>
+      <p>取代它的控制軸是 <code>output_config={"effort": ...}</code>，從 <code>low</code> 到 <code>max</code>，控制的是<strong>思考深度與 token 花費</strong>而不是隨機性。注意 <code>claude-haiku-4-5</code> 和 OpenAI 的模型還有 <code>temperature</code>——這是做雙供應商抽象層時要小心的地方。</p>
+    </div></div>
+  </div>
+  <div class="q">
+    <div class="q-q"><span class="qn">3</span><span>你的 structured output 有 schema 約束了，為什麼還需要 Pydantic 驗證和重試？</span></div>
+    <button class="q-btn">看答案</button>
+    <div class="q-a"><div class="ans">
+      <p>schema 保證「JSON 語法合法、欄位符合型別」，但不保證：</p>
+      <ul>
+        <li><strong>沒被截斷</strong>——撞到 <code>max_tokens</code> 時 HTTP 仍是 200，JSON 卻少了尾巴。要檢查 <code>stop_reason</code>。</li>
+        <li><strong>符合業務規則</strong>——schema 說 <code>amount</code> 是數字，但「金額不能是負數」、「未授權交易的 urgency 必須是 high」這類規則要靠 Pydantic 的 <code>Field</code> 約束或自訂驗證器。</li>
+        <li><strong>內容正確</strong>——模型可能把金額看錯、把類型分錯。這要靠 evals（第 4、6 週）。</li>
+      </ul>
+      <p>schema 擋格式問題，Pydantic 擋語意問題，evals 擋正確性問題。三層是不同的事。</p>
+    </div></div>
+  </div>
+  <div class="q">
+    <div class="q-q"><span class="qn">4</span><span>哪些錯誤該重試，哪些不該？為什麼重試要加 jitter？</span></div>
+    <button class="q-btn">看答案</button>
+    <div class="q-a"><div class="ans">
+      <p><strong>該重試</strong>：429（速率限制）、5xx（伺服器錯誤）、連線錯誤、timeout。這些是暫時性的。</p>
+      <p><strong>不該重試</strong>：400（請求格式錯）、401（key 無效）、404（模型 ID 錯）。這些是你的 bug，重試一萬次結果一樣，只是浪費時間並掩蓋問題。</p>
+      <p><strong>jitter</strong>：如果 100 個請求同時被限流，沒有隨機抖動的話它們會在完全同一秒一起重試，造成新的尖峰然後一起再失敗（thundering herd）。加一點隨機把它們打散。</p>
+      <p>另外：<strong>Anthropic SDK 預設已經會重試 429/5xx/連線錯誤</strong>，先用 <code>max_retries</code> 調整內建行為，不要急著自己寫一套。</p>
+    </div></div>
+  </div>
+  <div class="q">
+    <div class="q-q"><span class="qn">5</span><span><code>response.content[0].text</code> 什麼時候會爆掉？</span></div>
+    <button class="q-btn">看答案</button>
+    <div class="q-a"><div class="ans">
+      <p><code>content</code> 是內容區塊的 list，第 0 個不一定是文字。開了 thinking 模式時第 0 個可能是 <code>thinking</code> block，有工具呼叫時可能是 <code>tool_use</code> block——這兩種都沒有 <code>.text</code> 屬性，會丟 <code>AttributeError</code>。</p>
+      <p>穩健寫法是過濾 type：<code>next((b.text for b in response.content if b.type == "text"), "")</code>。</p>
+    </div></div>
+  </div>
+  <div class="q">
+    <div class="q-q"><span class="qn">6</span><span>為什麼 output token 比 input token 貴，這對設計有什麼影響？</span></div>
+    <button class="q-btn">看答案</button>
+    <div class="q-a"><div class="ans">
+      <p>現行模型 output 大約是 input 的 <strong>5 倍價格</strong>（例如 Opus 5.5 是 $4 vs $20 /1M）。原因是生成是逐 token 自迴歸的，無法像讀取輸入那樣平行處理。</p>
+      <p>設計影響：<strong>讓模型少講話的效益遠大於讓它少讀東西</strong>。所以——要求簡潔的輸出格式、不要叫模型重複輸入內容、用 enum 代替自由文字、分類任務的 <code>max_tokens</code> 設小。至於「少讀東西」那一側，更有效的手段是 prompt caching 而不是刪減上下文。</p>
+    </div></div>
+  </div>
+</div>
+
+<h2 id="s13"><span class="num">13</span>常見錯誤排查</h2>
+
+<div class="tw">
+<table>
+<thead><tr><th>症狀</th><th>原因與解法</th></tr></thead>
+<tbody>
+<tr>
+  <td><code>ModuleNotFoundError: No module named 'anthropic'</code></td>
+  <td>你用系統的 <code>python</code> 跑而不是專案環境。<strong>一律用 <code>uv run python ...</code></strong>，不要直接 <code>python ...</code>。</td>
+</tr>
+<tr>
+  <td><code>AuthenticationError</code> / 401</td>
+  <td>依序檢查：<code>.env</code> 存在嗎？有呼叫 <code>load_dotenv()</code> 嗎？變數名稱是 <code>ANTHROPIC_API_KEY</code> 嗎（不是 <code>CLAUDE_API_KEY</code>）？key 有沒有多複製到空白或換行？</td>
+</tr>
+<tr>
+  <td><code>BadRequestError</code>，訊息提到 <code>temperature</code></td>
+  <td>現行 Claude 模型已移除此參數。拿掉它，需要控制深度就用 <code>output_config={"effort": ...}</code>。見 <a href="#s4-temp">§4</a>。</td>
+</tr>
+<tr>
+  <td><code>BadRequestError</code>，訊息提到 <code>budget_tokens</code></td>
+  <td>舊的思考預算寫法。改成 <code>thinking={"type": "adaptive"}</code>。</td>
+</tr>
+<tr>
+  <td><code>NotFoundError</code> / 404</td>
+  <td>模型 ID 錯。最常見是<strong>自己加了日期後綴</strong>——<code>claude-opus-5-5</code> 就是完整 ID，不要寫成 <code>claude-opus-5-5-20260401</code>。</td>
+</tr>
+<tr>
+  <td>JSON 解析失敗，但 HTTP 是 200</td>
+  <td>幾乎都是撞到 <code>max_tokens</code> 被截斷。檢查 <code>response.stop_reason</code>，是 <code>"max_tokens"</code> 就調高上限。</td>
+</tr>
+<tr>
+  <td><code>AttributeError: 'ThinkingBlock' object has no attribute 'text'</code></td>
+  <td>用了 <code>content[0].text</code> 但第 0 個區塊是思考區塊。改用 type 過濾。見 <a href="#s3-blocks">§3</a>。</td>
+</tr>
+<tr>
+  <td>模型「忘記」前面說過的話</td>
+  <td>忘記把 assistant 的回答 append 回 <code>messages</code>。見 <a href="#s3-stateless">§3</a>。</td>
+</tr>
+<tr>
+  <td>串流的文字一塊一塊跳出來</td>
+  <td><code>print</code> 少了 <code>flush=True</code>，輸出被緩衝住了。</td>
+</tr>
+<tr>
+  <td>思考模式開了但 <code>block.thinking</code> 是空字串</td>
+  <td><code>display</code> 預設是 <code>"omitted"</code>。要看到摘要得明確寫 <code>thinking={"type": "adaptive", "display": "summarized"}</code>。</td>
+</tr>
+<tr>
+  <td><code>AttributeError</code> on <code>stop_details</code></td>
+  <td><code>stop_details</code> 只在 <code>stop_reason == "refusal"</code> 時有值，其他情況是 <code>None</code>。取用前要先判斷。</td>
+</tr>
+<tr>
+  <td>Pydantic 報 <code>.dict()</code> 已棄用</td>
+  <td>Pydantic 2.x 改名了：<code>.dict()</code> → <code>.model_dump()</code>、<code>.json()</code> → <code>.model_dump_json()</code>。</td>
+</tr>
+<tr>
+  <td>程式卡住很久才回報錯誤</td>
+  <td>timeout 會乘上重試次數：最壞是 <code>timeout × (max_retries + 1)</code>。調低其中一個。</td>
+</tr>
+</tbody>
+</table>
+</div>
+
+<h2 id="s14"><span class="num">14</span>延伸閱讀</h2>
+
+<p>不用全部讀完。以下兩項對應這一課，<strong>先把 Anthropic courses 的前兩門做完就夠了</strong>。</p>
+
+<div class="tw">
+<table>
+<thead><tr><th>資源</th><th>讀什麼</th></tr></thead>
+<tbody>
+<tr><td><a href="https://github.com/anthropics/courses">Anthropic courses</a></td><td>免費的 Jupyter 課程。這週對應前兩門：API 基礎、prompt 基礎。</td></tr>
+<tr><td><a href="https://docs.claude.com/en/docs/build-with-claude/prompt-engineering/overview">Claude prompt engineering 文件</a></td><td>system prompt 的寫法。第 2 週會深入，這週先掃一遍。</td></tr>
+<tr><td><a href="https://docs.pydantic.dev/">Pydantic 文件</a></td><td><code>Field</code> 的所有約束選項、以及自訂驗證器（<code>@field_validator</code>）。</td></tr>
+<tr><td><a href="https://docs.astral.sh/uv/">uv 文件</a></td><td>只需要看 Projects 那一章。</td></tr>
+</tbody>
+</table>
+</div>
+
+<div class="box tip">
+  <p class="bt">下一課預告</p>
+  <p>第 2 課是 <strong>Tool calling 與 Prompt 設計</strong>：你會手寫（不靠框架）一個工具呼叫迴圈，讓模型能去 SQLite 查假交易資料，並且做出一個 MCP server 接到 Claude Code 實測。那是畢業專題的第一塊實體程式碼。</p>
+  <p>這一課的 <code>ComplaintAnalysis</code> 和供應商抽象層會被直接拿去用，所以<strong>把它們寫乾淨一點</strong>。</p>
+</div>
+
+<div class="foot">
+  <p>AI 應用工程師 4–8 週學習計畫 · 第 1 週第 1 課<br>
+  Claude API 的模型 ID、價格與參數對照 2026 年 9 月官方 SDK 文件。LLM API 變動快，開始每週前先確認官方快速入門有沒有更新。</p>
+  <p><a href="index.html">← 課程索引</a> · <a href="02-tool-calling-mcp.html">第 2 課：Tool calling 與 Prompt 設計 →</a></p>
+</div>
+
+</div>
+</main>
+</div>
+
+<!--SHARED-JS:START-->
+<script>
+/* 課程共用互動 —— 語法高亮、語法解剖、目錄、任務清單、測驗、計算器 */
+(function(){
+"use strict";
+
+/* ---------- 工具 ---------- */
+var esc = function(s){ return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); };
+function store(k, v){
+  try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); }
+  catch(e){ return null; }
+}
+
+/* ---------- 深淺色 ---------- */
+var tBtn = document.getElementById("themeBtn");
+var saved = store("lesson-theme") || store("l1-theme");   /* l1-theme 是舊的鍵名，沿用既有設定 */
+if (saved === "dark" || saved === "light") document.documentElement.setAttribute("data-theme", saved);
+if (tBtn) tBtn.addEventListener("click", function(){
+  var cur = document.documentElement.getAttribute("data-theme");
+  if (!cur) cur = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  var next = cur === "dark" ? "light" : "dark";
+  document.documentElement.setAttribute("data-theme", next);
+  store("lesson-theme", next);
+});
+
+/* ---------- 行動版選單 ---------- */
+var sb = document.getElementById("sidebar"), scrim = document.getElementById("scrim");
+var menuBtn = document.getElementById("menuBtn");
+function closeSb(){ if (sb) sb.classList.remove("open"); if (scrim) scrim.classList.remove("on"); }
+if (menuBtn && sb) menuBtn.addEventListener("click", function(){
+  sb.classList.toggle("open"); if (scrim) scrim.classList.toggle("on");
+});
+if (scrim) scrim.addEventListener("click", closeSb);
+
+/* ---------- 語法高亮 ---------- */
+var PY = [
+  ["com", /#[^\n]*/y],
+  ["str", /(?:[fFrRbB]{0,2})(?:"""[\s\S]*?"""|'''[\s\S]*?'''|"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*')/y],
+  ["dec", /@[A-Za-z_][\w.]*/y],
+  ["kw",  /\b(?:import|from|as|def|class|return|if|elif|else|for|while|in|not|and|or|is|None|True|False|with|try|except|finally|raise|async|await|yield|lambda|pass|break|continue|global|nonlocal|assert|del)\b/y],
+  ["bi",  /\b(?:print|len|range|str|int|float|bool|list|dict|set|tuple|type|open|sum|min|max|next|input|enumerate|zip|sorted|isinstance|Exception|RuntimeError|ValueError|AttributeError|KeyError)\b/y],
+  ["num", /\b\d[\d_]*\.?\d*(?:[eE][-+]?\d+)?\b/y],
+  ["fn",  /\b[A-Za-z_]\w*(?=\s*\()/y],
+  ["op",  /[-+*/%=<>!&|^~:,.()[\]{}]/y]
+];
+var BASH = [
+  ["com", /#[^\n]*/y],
+  ["str", /"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'/y],
+  ["kw",  /\b(?:uv|git|brew|curl|cd|printf|echo|ollama|export|python|pytest|sh)\b/y],
+  ["dec", /(?:^|\s)(--?[A-Za-z][\w-]*)/y],
+  ["num", /\b\d[\d.]*\b/y],
+  ["op",  /[|&>;<]/y]
+];
+var SQL = [
+  ["com", /--[^\n]*/y],
+  ["str", /'(?:''|[^'])*'/y],
+  ["kw",  /\b(?:CREATE|TABLE|INDEX|EXTENSION|IF|NOT|EXISTS|SELECT|FROM|WHERE|ORDER|BY|LIMIT|INSERT|INTO|VALUES|USING|ON|AS|AND|OR|DROP|DEFAULT|PRIMARY|KEY|NULL|WITH|SET|UPDATE|DELETE|JOIN|GROUP|HAVING)\b/iy],
+  ["bi",  /\b(?:vector|bigserial|text|int|timestamptz|real|boolean|now|hnsw|ivfflat|vector_cosine_ops|vector_l2_ops|vector_ip_ops|vector_l1_ops)\b/iy],
+  ["num", /\b\d+\b/y],
+  ["op",  /<=>|<->|<#>|<\+>|[(),;.*=]/y]
+];
+var YAML = [
+  ["com", /#[^\n]*/y],
+  ["str", /"(?:\\.|[^"\\])*"|'(?:[^'])*'/y],
+  ["fn",  /^[ \t]*[A-Za-z_][\w.-]*(?=:)/my],
+  ["op",  /^[ \t]*-(?=\s)/my],
+  ["num", /\b\d+\b/y],
+  ["kw",  /\b(?:true|false|null)\b/y]
+];
+var JSONR = [
+  ["str", /"(?:\\.|[^"\\])*"(?=\s*:)/y],
+  ["fn",  /"(?:\\.|[^"\\])*"/y],
+  ["kw",  /\b(?:true|false|null)\b/y],
+  ["num", /-?\b\d[\d.]*(?:[eE][-+]?\d+)?\b/y],
+  ["op",  /[{}[\],:]/y]
+];
+function pickRules(lang){
+  return lang === "python" ? PY
+       : lang === "bash"   ? BASH
+       : lang === "json"   ? JSONR
+       : lang === "sql"    ? SQL
+       : lang === "yaml"   ? YAML
+       : null;
+}
+function hl(code, rules){
+  var out = "", i = 0, n = code.length;
+  while (i < n){
+    var hit = false;
+    for (var r = 0; r < rules.length; r++){
+      var cls = rules[r][0], re = rules[r][1];
+      re.lastIndex = i;
+      var m = re.exec(code);
+      if (m && m.index === i && m[0].length){
+        out += '<span class="t-' + cls + '">' + esc(m[0]) + "</span>";
+        i += m[0].length; hit = true; break;
+      }
+    }
+    if (!hit){ out += esc(code[i]); i++; }
+  }
+  return out;
+}
+
+/* ---------- 程式碼區塊：高亮 + 工具列 + 複製 ---------- */
+Array.prototype.forEach.call(document.querySelectorAll(".cb"), function(cb){
+  var pre = cb.querySelector("pre"), codeEl = cb.querySelector("code");
+  if (!pre || !codeEl) return;
+  var lang = cb.getAttribute("data-lang") || "text";
+  var raw = codeEl.textContent;
+
+  /* anno 區塊的高亮交給下面的 anno 迴圈處理 —— 它需要在高亮前插入標記 */
+  var rules = pickRules(lang);
+  if (rules && !cb.hasAttribute("data-anno")) codeEl.innerHTML = hl(raw, rules);
+
+  var bar = document.createElement("div");
+  bar.className = "cb-bar";
+  var file = cb.getAttribute("data-file");
+  bar.innerHTML = '<span class="cb-lang">' + esc(lang) + "</span>" +
+                  (file ? '<span class="cb-file">' + esc(file) + "</span>" : "") +
+                  '<span class="sp"></span>';
+  var btn = document.createElement("button");
+  btn.className = "cb-copy"; btn.type = "button"; btn.textContent = "複製";
+  btn.addEventListener("click", function(){
+    var done = function(){
+      btn.textContent = "已複製"; btn.classList.add("done");
+      setTimeout(function(){ btn.textContent = "複製"; btn.classList.remove("done"); }, 1600);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(raw).then(done, function(){ btn.textContent = "複製失敗"; });
+    } else {
+      var ta = document.createElement("textarea");
+      ta.value = raw; document.body.appendChild(ta); ta.select();
+      try { document.execCommand("copy"); done(); } catch(e){ btn.textContent = "複製失敗"; }
+      document.body.removeChild(ta);
+    }
+  });
+  bar.appendChild(btn);
+  cb.insertBefore(bar, pre);
+});
+
+/* ---------- 語法解剖：標記 ↔ 說明連動 ---------- */
+/* 每個 .note 用 data-line 指定它對應程式碼的第幾行（1-based）。
+   做法：先在原始文字的行尾插入哨符 \u0001，高亮之後再把哨符換成標記 —— 
+   這樣標記一定落在 span 邊界外，不會破壞高亮產生的 HTML 結構。 */
+Array.prototype.forEach.call(document.querySelectorAll(".anno"), function(anno){
+  var cb = anno.querySelector(".cb");
+  var codeEl = anno.querySelector("pre code");
+  var notes = anno.querySelectorAll(".note");
+  if (!cb || !codeEl || !notes.length) return;
+
+  var lang = cb.getAttribute("data-lang") || "text";
+  var rules = pickRules(lang);
+
+  var pairs = [];
+  Array.prototype.forEach.call(notes, function(nd, i){
+    var ln = parseInt(nd.getAttribute("data-line"), 10);
+    if (ln > 0) pairs.push({ line: ln, note: i + 1 });
+  });
+  if (!pairs.length) return;
+  pairs.sort(function(a, b){ return a.line - b.line; });   /* 哨符要依文件順序取用 */
+
+  var lines = codeEl.textContent.split("\n");
+  pairs.forEach(function(pr){
+    if (pr.line >= 1 && pr.line <= lines.length) lines[pr.line - 1] += "\u0001";
+  });
+
+  var marked = lines.join("\n");
+  var out = rules ? hl(marked, rules) : esc(marked);
+  var k = 0;
+  out = out.replace(/\u0001/g, function(){
+    var pr = pairs[k++];
+    return pr ? '<span class="pin" data-pin="' + pr.note + '" data-n="' + pr.note + '"></span>' : "";
+  });
+  codeEl.innerHTML = out;
+
+  function activate(n){
+    Array.prototype.forEach.call(anno.querySelectorAll(".pin"), function(pin){
+      pin.classList.toggle("on", pin.getAttribute("data-pin") === String(n));
+    });
+    Array.prototype.forEach.call(notes, function(nd, idx){
+      nd.classList.toggle("on", idx + 1 === n);
+    });
+  }
+  Array.prototype.forEach.call(anno.querySelectorAll(".pin"), function(pin){
+    pin.addEventListener("click", function(){ activate(Number(pin.getAttribute("data-pin"))); });
+  });
+  Array.prototype.forEach.call(notes, function(nd, idx){
+    nd.style.cursor = "pointer";
+    nd.addEventListener("click", function(){ activate(idx + 1); });
+  });
+});
+
+/* ---------- 目錄 + scroll-spy ---------- */
+var toc = document.getElementById("toc");
+var heads = toc ? document.querySelectorAll("h2[id], h3[id]") : [];
+var links = [];
+
+function goTo(el){
+  var top = el.getBoundingClientRect().top + window.scrollY - 16;
+  /* 近距離用平滑捲動（有助於定位），遠距離直接跳 ——
+     這份文件很長，跨章節平滑捲動要一兩秒，反而難用。 */
+  var smooth = Math.abs(top - window.scrollY) < 2000;
+  try { window.scrollTo({ top: top, behavior: smooth ? "smooth" : "auto" }); }
+  catch (e) { window.scrollTo(0, top); }          /* 舊瀏覽器沒有 options 形式 */
+  try { history.replaceState(null, "", "#" + el.id); } catch (e) {}  /* data: URL 會擋，忽略 */
+}
+Array.prototype.forEach.call(heads, function(h){
+  var li = document.createElement("li");
+  if (h.tagName === "H3") li.className = "sub";
+  var a = document.createElement("a");
+  a.href = "#" + h.id;
+  var numEl = h.querySelector(".num");
+  a.textContent = numEl ? numEl.textContent + " " + h.textContent.slice(numEl.textContent.length) : h.textContent;
+  /* 不依賴瀏覽器的錨點跳轉：從 file:// 或 data: 開啟時它會被當成換頁而失效，
+     這裡自己捲動，各種開啟方式都一致。 */
+  a.addEventListener("click", function(ev){
+    ev.preventDefault();
+    closeSb();
+    goTo(h);
+  });
+  li.appendChild(a); toc.appendChild(li);
+  links.push({ a: a, el: h });
+});
+var spy = function(){
+  var y = window.scrollY + 90, cur = links[0];
+  for (var i = 0; i < links.length; i++){ if (links[i].el.offsetTop <= y) cur = links[i]; }
+  links.forEach(function(l){ l.a.classList.toggle("active", l === cur); });
+};
+var ticking = false;
+window.addEventListener("scroll", function(){
+  if (ticking) return; ticking = true;
+  requestAnimationFrame(function(){ spy(); ticking = false; });
+}, { passive: true });
+spy();
+
+/* ---------- 任務清單 ---------- */
+function wireTasks(wrapId, barId, pcId, key, legacyKey){
+  var wrap = document.getElementById(wrapId);
+  if (!wrap) return;
+  var boxes = wrap.querySelectorAll('input[type="checkbox"]');
+  var bar = document.getElementById(barId), pc = document.getElementById(pcId);
+  var savedState = {};
+  /* 鍵名改過，舊鍵的進度還讀得回來 */
+  var rawState = store(key) || (legacyKey ? store(legacyKey) : null);
+  try { savedState = JSON.parse(rawState || "{}") || {}; } catch(e){ savedState = {}; }
+
+  function render(){
+    var done = 0;
+    Array.prototype.forEach.call(boxes, function(b){
+      b.closest(".task").classList.toggle("done", b.checked);
+      if (b.checked) done++;
+    });
+    bar.style.width = (boxes.length ? (done / boxes.length * 100) : 0) + "%";
+    pc.textContent = done + " / " + boxes.length;
+  }
+  Array.prototype.forEach.call(boxes, function(b){
+    if (savedState[b.id]) b.checked = true;
+    b.addEventListener("change", function(){
+      savedState[b.id] = b.checked;
+      store(key, JSON.stringify(savedState));
+      render();
+    });
+  });
+  render();
+}
+/* 內文裡指向章節的連結（例如「見 §4」）同樣自己接管 */
+Array.prototype.forEach.call(document.querySelectorAll('.main a[href^="#"]'), function(a){
+  a.addEventListener("click", function(ev){
+    var target = document.getElementById(a.getAttribute("href").slice(1));
+    if (!target) return;
+    ev.preventDefault();
+    goTo(target);
+  });
+});
+
+/* 鍵名帶上檔名，各課的進度才不會互相覆蓋 */
+var PAGE = (location.pathname.split("/").pop() || "lesson").replace(/\.html$/, "");
+var LEGACY = PAGE === "01-llm-api-basics";    /* 第 1 課原本用 l1-* 當鍵名 */
+wireTasks("tasks", "taskBar", "taskPc", PAGE + "-tasks", LEGACY ? "l1-tasks" : null);
+wireTasks("tasks2", "taskBar2", "taskPc2", PAGE + "-bonus", LEGACY ? "l1-bonus" : null);
+
+/* ---------- 測驗 ---------- */
+Array.prototype.forEach.call(document.querySelectorAll("#quiz .q"), function(q){
+  var btn = q.querySelector(".q-btn"), ans = q.querySelector(".q-a");
+  btn.addEventListener("click", function(){
+    var on = ans.classList.toggle("on");
+    btn.textContent = on ? "收起答案" : "看答案";
+  });
+});
+
+/* ---------- 成本計算器 ---------- */
+(function(){
+  var ids = ["c-model","c-in","c-out","c-n"];
+  var el = {}; ids.forEach(function(i){ el[i] = document.getElementById(i); });
+  if (!el["c-model"]) return;
+  var out = {};
+  ["o-it","o-ip","o-ic","o-ot","o-op","o-oc","o-total","o-each","o-n"].forEach(function(i){
+    out[i] = document.getElementById(i);
+  });
+  var fmt = function(n, d){ return n.toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d }); };
+
+  function calc(){
+    var parts = el["c-model"].value.split(",");
+    var pin = parseFloat(parts[0]), pout = parseFloat(parts[1]);
+    var ti = Math.max(0, parseFloat(el["c-in"].value) || 0);
+    var to = Math.max(0, parseFloat(el["c-out"].value) || 0);
+    var n  = Math.max(1, parseFloat(el["c-n"].value) || 1);
+
+    var inTok = ti * n, outTok = to * n;
+    var inCost = inTok / 1e6 * pin, outCost = outTok / 1e6 * pout;
+    var total = inCost + outCost;
+
+    out["o-it"].textContent = fmt(inTok, 0);
+    out["o-ot"].textContent = fmt(outTok, 0);
+    out["o-ip"].textContent = "$" + fmt(pin, 2);
+    out["o-op"].textContent = "$" + fmt(pout, 2);
+    out["o-ic"].textContent = "$" + fmt(inCost, 4);
+    out["o-oc"].textContent = "$" + fmt(outCost, 4);
+    out["o-n"].textContent  = fmt(n, 0);
+    out["o-total"].textContent = "$" + fmt(total, 2);
+    out["o-each"].textContent  = "$" + fmt(total / n, 6);
+  }
+  ids.forEach(function(i){
+    el[i].addEventListener("input", calc);
+    el[i].addEventListener("change", calc);
+  });
+  calc();
+})();
+
+})();
+
+</script>
+<!--SHARED-JS:END-->
+</body>
+</html>

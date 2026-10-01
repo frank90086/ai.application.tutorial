@@ -1,0 +1,1722 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>第 3 課 · RAG 基礎</title>
+<!--SHARED-CSS:START-->
+<style>
+/* 課程共用樣式 —— 各課的 HTML 都連到這一份 */
+/* ============ 設計 token ============ */
+:root{
+  --bg:#fbfaf7; --bg-2:#f3f1ec; --bg-3:#e9e6df;
+  --fg:#1c1a17; --fg-2:#4a463f; --fg-3:#7a7468;
+  --line:#ded9d0; --line-2:#c9c3b8;
+  --accent:#0f6d63; --accent-2:#0a544c; --accent-bg:#e4f1ef;
+  --warn:#9a5b00; --warn-bg:#fdf1de; --warn-line:#e8c38a;
+  --danger:#a52b25; --danger-bg:#fdeceb; --danger-line:#eab5b2;
+  --ok:#2d6a2f; --ok-bg:#e9f3e7; --ok-line:#b2d3ae;
+  --code-bg:#f5f3ee; --code-line:#e2ded5;
+  --t-kw:#8a2f7b; --t-str:#1f6b3a; --t-com:#8d8678; --t-num:#9a5b00;
+  --t-fn:#1f5fa8; --t-bi:#0f6d63; --t-op:#5a5448; --t-dec:#9a5b00;
+  --mark-bg:#fff0b3; --mark-line:#d9b93c;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  --sb:290px;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#16181a; --bg-2:#1d2023; --bg-3:#272b2f;
+    --fg:#e8e6e1; --fg-2:#b4b0a8; --fg-3:#847f76;
+    --line:#2f3337; --line-2:#3e4347;
+    --accent:#4fd1c0; --accent-2:#7fe3d5; --accent-bg:#13302d;
+    --warn:#e8b367; --warn-bg:#2e2516; --warn-line:#5c4722;
+    --danger:#f08b84; --danger-bg:#2e1a19; --danger-line:#5e2f2c;
+    --ok:#8fd08c; --ok-bg:#1a2a1a; --ok-line:#35502f;
+    --code-bg:#1b1e21; --code-line:#2b2f33;
+    --t-kw:#d98cc8; --t-str:#8fd08c; --t-com:#6f6a62; --t-num:#e8b367;
+    --t-fn:#7fb3e8; --t-bi:#4fd1c0; --t-op:#a09a90; --t-dec:#e8b367;
+    --mark-bg:#4a3f14; --mark-line:#8a7528;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#16181a; --bg-2:#1d2023; --bg-3:#272b2f;
+  --fg:#e8e6e1; --fg-2:#b4b0a8; --fg-3:#847f76;
+  --line:#2f3337; --line-2:#3e4347;
+  --accent:#4fd1c0; --accent-2:#7fe3d5; --accent-bg:#13302d;
+  --warn:#e8b367; --warn-bg:#2e2516; --warn-line:#5c4722;
+  --danger:#f08b84; --danger-bg:#2e1a19; --danger-line:#5e2f2c;
+  --ok:#8fd08c; --ok-bg:#1a2a1a; --ok-line:#35502f;
+  --code-bg:#1b1e21; --code-line:#2b2f33;
+  --t-kw:#d98cc8; --t-str:#8fd08c; --t-com:#6f6a62; --t-num:#e8b367;
+  --t-fn:#7fb3e8; --t-bi:#4fd1c0; --t-op:#a09a90; --t-dec:#e8b367;
+  --mark-bg:#4a3f14; --mark-line:#8a7528;
+}
+*{box-sizing:border-box}
+html{scroll-padding-top:1.5rem}  /* 捲動行為由 JS 的 goTo() 決定 */
+body{
+  margin:0; background:var(--bg); color:var(--fg);
+  font-family:var(--sans); font-size:16.5px; line-height:1.85;
+  -webkit-font-smoothing:antialiased;
+}
+
+/* ============ 版面 ============ */
+.shell{display:flex; min-height:100vh}
+.sidebar{
+  width:var(--sb); flex:0 0 var(--sb); border-right:1px solid var(--line);
+  background:var(--bg-2); position:sticky; top:0; height:100vh; overflow-y:auto;
+  padding:1.6rem 0 3rem;
+}
+.main{flex:1 1 auto; min-width:0; padding:3rem 3rem 7rem}
+.wrap{max-width:780px; margin:0 auto}
+@media (max-width:1000px){
+  .sidebar{position:fixed; left:0; top:0; z-index:60; transform:translateX(-100%); transition:transform .22s ease; box-shadow:0 0 40px rgba(0,0,0,.25)}
+  .sidebar.open{transform:none}
+  .main{padding:4.2rem 1.1rem 6rem}
+  :root{--sb:280px}
+}
+
+/* ============ 側邊欄 ============ */
+.sb-head{padding:0 1.4rem 1.1rem; border-bottom:1px solid var(--line); margin-bottom:1rem}
+.sb-kicker{font-size:.7rem; letter-spacing:.14em; text-transform:uppercase; color:var(--accent); font-weight:700}
+.sb-title{font-size:1.02rem; font-weight:700; margin:.3rem 0 0; line-height:1.4}
+.sb-meta{font-size:.76rem; color:var(--fg-3); margin-top:.35rem}
+.toc{list-style:none; margin:0; padding:0 .7rem}
+.toc a{
+  display:block; padding:.36rem .7rem; font-size:.855rem; color:var(--fg-2);
+  text-decoration:none; border-radius:6px; line-height:1.5; border-left:2px solid transparent;
+}
+.toc a:hover{background:var(--bg-3); color:var(--fg)}
+.toc a.active{color:var(--accent); background:var(--accent-bg); border-left-color:var(--accent); font-weight:600}
+.toc .sub a{padding-left:1.5rem; font-size:.8rem; color:var(--fg-3)}
+.toc .lv0{font-size:.7rem; letter-spacing:.1em; text-transform:uppercase; color:var(--fg-3); padding:1rem .7rem .25rem; font-weight:700}
+
+/* ============ 浮動控制 ============ */
+.fab{
+  position:fixed; z-index:70; border:1px solid var(--line-2); background:var(--bg-2); color:var(--fg);
+  border-radius:8px; cursor:pointer; font:inherit; font-size:.8rem; padding:.42rem .6rem;
+  box-shadow:0 2px 8px rgba(0,0,0,.08);
+}
+.fab:hover{background:var(--bg-3)}
+#menuBtn{top:.8rem; left:.8rem; display:none}
+@media (max-width:1000px){#menuBtn{display:block}}
+#themeBtn{top:.8rem; right:.8rem}
+.scrim{position:fixed; inset:0; background:rgba(0,0,0,.4); z-index:55; display:none}
+.scrim.on{display:block}
+@media (min-width:1001px){.scrim{display:none!important}}
+
+/* ============ 排版 ============ */
+.hero{border-bottom:1px solid var(--line); padding-bottom:1.8rem; margin-bottom:2.4rem}
+.hero .kicker{font-size:.76rem; letter-spacing:.14em; text-transform:uppercase; color:var(--accent); font-weight:700}
+h1{font-size:2.15rem; line-height:1.25; margin:.5rem 0 .7rem; letter-spacing:-.01em; font-weight:800}
+.lede{font-size:1.08rem; color:var(--fg-2); margin:0}
+.facts{display:flex; flex-wrap:wrap; gap:.5rem; margin-top:1.3rem}
+.fact{font-size:.78rem; background:var(--bg-2); border:1px solid var(--line); border-radius:999px; padding:.26rem .72rem; color:var(--fg-2)}
+.fact b{color:var(--fg); font-weight:650}
+
+h2{
+  font-size:1.5rem; margin:3.4rem 0 1rem; padding-top:.6rem; line-height:1.35; font-weight:750;
+  letter-spacing:-.005em; scroll-margin-top:1.5rem;
+}
+h2 .num{color:var(--accent); font-variant-numeric:tabular-nums; margin-right:.5rem; font-weight:800}
+h3{font-size:1.13rem; margin:2.2rem 0 .7rem; font-weight:700; scroll-margin-top:1.5rem}
+h4{font-size:.98rem; margin:1.6rem 0 .5rem; font-weight:700; color:var(--fg-2)}
+p{margin:0 0 1.1rem}
+a{color:var(--accent); text-decoration:underline; text-decoration-thickness:1px; text-underline-offset:2px}
+ul,ol{margin:0 0 1.2rem; padding-left:1.45rem}
+li{margin:.4rem 0}
+li>ul,li>ol{margin:.4rem 0 .3rem}
+strong{font-weight:680}
+hr{border:0; border-top:1px solid var(--line); margin:2.6rem 0}
+.small{font-size:.86rem; color:var(--fg-3)}
+
+code{
+  font-family:var(--mono); font-size:.855em; background:var(--bg-3);
+  padding:.1em .34em; border-radius:4px; word-break:break-word;
+}
+kbd{font-family:var(--mono); font-size:.8em; background:var(--bg-2); border:1px solid var(--line-2); border-bottom-width:2px; border-radius:4px; padding:.05em .35em}
+
+/* ============ 程式碼區塊 ============ */
+.cb{margin:1.3rem 0; border:1px solid var(--code-line); border-radius:9px; background:var(--code-bg); overflow:hidden}
+.cb-bar{
+  display:flex; align-items:center; gap:.6rem; padding:.42rem .75rem;
+  border-bottom:1px solid var(--code-line); background:var(--bg-2); font-size:.74rem; color:var(--fg-3);
+}
+.cb-lang{font-family:var(--mono); letter-spacing:.04em; text-transform:uppercase; font-weight:700}
+.cb-file{margin-left:.1rem; font-family:var(--mono); color:var(--fg-2)}
+.cb-bar .sp{flex:1}
+.cb-copy{
+  border:1px solid var(--line-2); background:var(--bg); color:var(--fg-2); font:inherit; font-size:.72rem;
+  padding:.16rem .5rem; border-radius:5px; cursor:pointer;
+}
+.cb-copy:hover{background:var(--bg-3); color:var(--fg)}
+.cb-copy.done{color:var(--ok); border-color:var(--ok-line)}
+.cb pre{margin:0; padding:.95rem 1rem; overflow-x:auto; font-family:var(--mono); font-size:.845rem; line-height:1.72; tab-size:4}
+.cb code{background:none; padding:0; font-size:inherit}
+.t-kw{color:var(--t-kw)} .t-str{color:var(--t-str)} .t-com{color:var(--t-com); font-style:italic}
+.t-num{color:var(--t-num)} .t-fn{color:var(--t-fn)} .t-bi{color:var(--t-bi)}
+.t-op{color:var(--t-op)} .t-dec{color:var(--t-dec)}
+
+/* ============ 語法解剖 ============ */
+.anno{margin:1.4rem 0; border:1px solid var(--line); border-radius:9px; overflow:hidden}
+.anno-head{padding:.5rem .85rem; background:var(--bg-2); border-bottom:1px solid var(--line); font-size:.78rem; color:var(--fg-2); font-weight:650}
+.anno-head b{color:var(--accent)}
+.anno .cb{margin:0; border:0; border-radius:0}
+.anno .cb-bar{border-radius:0}
+.pin{
+  background:var(--mark-bg); border-bottom:2px solid var(--mark-line); border-radius:3px;
+  cursor:pointer; padding:0 .12em; position:relative; color:inherit;
+}
+.pin::after{
+  content:attr(data-n); font-size:.62em; vertical-align:super; font-weight:800;
+  color:var(--warn); margin-left:.12em; font-family:var(--sans);
+}
+.pin:hover,.pin.on{background:var(--mark-line); outline:2px solid var(--mark-line)}
+.notes{border-top:1px solid var(--line); background:var(--bg-2)}
+.note{display:flex; gap:.7rem; padding:.62rem .9rem; border-bottom:1px solid var(--line); font-size:.885rem; line-height:1.68}
+.note:last-child{border-bottom:0}
+.note.on{background:var(--accent-bg)}
+.note-n{
+  flex:0 0 1.35rem; height:1.35rem; border-radius:50%; background:var(--mark-line); color:#241f05;
+  display:grid; place-items:center; font-size:.72rem; font-weight:800; margin-top:.18rem; font-variant-numeric:tabular-nums;
+}
+.note div{min-width:0}
+.note code{font-size:.84em}
+
+/* ============ 提示框 ============ */
+.box{margin:1.4rem 0; padding:.95rem 1.1rem; border-radius:9px; border:1px solid var(--line); border-left-width:4px; background:var(--bg-2); font-size:.93rem}
+.box>:last-child{margin-bottom:0}
+.box .bt{font-weight:750; font-size:.84rem; letter-spacing:.02em; margin:0 0 .4rem; display:flex; align-items:center; gap:.4rem}
+.box.tip{border-left-color:var(--accent); background:var(--accent-bg)} .box.tip .bt{color:var(--accent-2)}
+.box.warn{border-left-color:var(--warn-line); background:var(--warn-bg)} .box.warn .bt{color:var(--warn)}
+.box.danger{border-left-color:var(--danger-line); background:var(--danger-bg)} .box.danger .bt{color:var(--danger)}
+.box.ok{border-left-color:var(--ok-line); background:var(--ok-bg)} .box.ok .bt{color:var(--ok)}
+.box.py{border-left-color:var(--t-fn); background:var(--bg-2)} .box.py .bt{color:var(--t-fn)}
+
+/* ============ 表格 ============ */
+.tw{overflow-x:auto; margin:1.4rem 0}
+table{border-collapse:collapse; width:100%; font-size:.885rem}
+th,td{border:1px solid var(--line); padding:.5rem .68rem; text-align:left; vertical-align:top}
+th{background:var(--bg-2); font-weight:700; font-size:.83rem}
+td code{font-size:.85em}
+tbody tr:nth-child(even){background:var(--bg-2)}
+.num-c{text-align:right; font-variant-numeric:tabular-nums; font-family:var(--mono); font-size:.85em}
+
+/* ============ 任務清單 ============ */
+.tasks{margin:1.4rem 0; border:1px solid var(--line); border-radius:9px; overflow:hidden}
+.tasks-head{padding:.7rem .95rem; background:var(--bg-2); border-bottom:1px solid var(--line); display:flex; align-items:center; gap:.7rem; flex-wrap:wrap}
+.tasks-head b{font-size:.92rem}
+.bar{flex:1; min-width:110px; height:6px; background:var(--bg-3); border-radius:999px; overflow:hidden}
+.bar i{display:block; height:100%; width:0; background:var(--accent); transition:width .25s ease}
+.tasks-head .pc{font-size:.78rem; color:var(--fg-3); font-variant-numeric:tabular-nums}
+.task{display:flex; gap:.7rem; padding:.68rem .95rem; border-bottom:1px solid var(--line); font-size:.92rem; line-height:1.7; align-items:flex-start}
+.task:last-child{border-bottom:0}
+.task input{margin:.42rem 0 0; width:1.05rem; height:1.05rem; accent-color:var(--accent); flex:0 0 auto; cursor:pointer}
+.task label{cursor:pointer; min-width:0}
+.task.done label{color:var(--fg-3); text-decoration:line-through; text-decoration-color:var(--line-2)}
+.task .hint{display:block; font-size:.83rem; color:var(--fg-3); text-decoration:none; margin-top:.15rem}
+.task.done .hint{text-decoration:none}
+
+/* ============ 計算器 ============ */
+.calc{margin:1.5rem 0; border:1px solid var(--line); border-radius:9px; background:var(--bg-2); overflow:hidden}
+.calc-head{padding:.6rem .95rem; border-bottom:1px solid var(--line); font-size:.86rem; font-weight:700}
+.calc-body{padding:.95rem}
+.fields{display:grid; grid-template-columns:repeat(auto-fit,minmax(135px,1fr)); gap:.8rem}
+.f label{display:block; font-size:.76rem; color:var(--fg-3); margin-bottom:.22rem; font-weight:650}
+.f input,.f select{
+  width:100%; font:inherit; font-size:.88rem; padding:.4rem .55rem; border-radius:6px;
+  border:1px solid var(--line-2); background:var(--bg); color:var(--fg); font-variant-numeric:tabular-nums;
+}
+.f input:focus,.f select:focus{outline:2px solid var(--accent); outline-offset:1px; border-color:var(--accent)}
+.calc-out{margin-top:1rem; border-top:1px solid var(--line); padding-top:.9rem}
+.calc-out table{font-size:.85rem}
+.tot{display:flex; justify-content:space-between; align-items:baseline; margin-top:.8rem; padding-top:.7rem; border-top:1px dashed var(--line-2); font-size:.9rem}
+.tot b{font-size:1.25rem; font-family:var(--mono); color:var(--accent); font-variant-numeric:tabular-nums}
+.calc .note-s{font-size:.78rem; color:var(--fg-3); margin-top:.7rem}
+
+/* ============ 測驗 ============ */
+.quiz{margin:1.4rem 0; border:1px solid var(--line); border-radius:9px; overflow:hidden}
+.q{border-bottom:1px solid var(--line)}
+.q:last-child{border-bottom:0}
+.q-q{padding:.8rem .95rem; font-size:.93rem; font-weight:650; display:flex; gap:.6rem}
+.q-q .qn{color:var(--accent); font-weight:800; flex:0 0 auto; font-variant-numeric:tabular-nums}
+.q-btn{margin:0 .95rem .8rem; border:1px solid var(--line-2); background:var(--bg-2); color:var(--fg-2); font:inherit; font-size:.79rem; padding:.3rem .7rem; border-radius:6px; cursor:pointer}
+.q-btn:hover{background:var(--bg-3); color:var(--fg)}
+.q-a{display:none; padding:0 .95rem .9rem; font-size:.9rem; line-height:1.75}
+.q-a.on{display:block}
+.q-a .ans{border-left:3px solid var(--ok-line); background:var(--ok-bg); padding:.6rem .8rem; border-radius:0 6px 6px 0}
+.q-a .ans>:last-child{margin-bottom:0}
+
+/* ============ 其他 ============ */
+.flow{margin:1.5rem 0; border:1px solid var(--line); border-radius:9px; background:var(--bg-2); padding:1.1rem; overflow-x:auto}
+.flow svg{display:block; margin:0 auto; max-width:100%; height:auto}
+.foot{margin-top:4rem; padding-top:1.6rem; border-top:1px solid var(--line); font-size:.86rem; color:var(--fg-3)}
+.deliver{border:2px solid var(--accent); border-radius:9px; padding:1rem 1.15rem; margin:1.6rem 0; background:var(--accent-bg)}
+.deliver .bt{font-size:.78rem; letter-spacing:.08em; text-transform:uppercase; color:var(--accent-2); font-weight:800; margin:0 0 .45rem}
+.deliver>:last-child{margin-bottom:0}
+.tag{display:inline-block; font-size:.7rem; font-weight:700; padding:.08rem .42rem; border-radius:4px; background:var(--bg-3); color:var(--fg-2); vertical-align:middle; margin-left:.3rem; letter-spacing:.02em}
+.tag.new{background:var(--accent-bg); color:var(--accent-2)}
+.tag.old{background:var(--danger-bg); color:var(--danger)}
+::selection{background:var(--mark-bg); color:var(--fg)}
+@media print{.sidebar,.fab,.scrim{display:none!important} .main{padding:0} .q-a{display:block!important}}
+
+</style>
+<!--SHARED-CSS:END-->
+</head>
+<body>
+<button class="fab" id="menuBtn" aria-label="目錄">☰ 目錄</button>
+<button class="fab" id="themeBtn" aria-label="切換深淺色">◐</button>
+<div class="scrim" id="scrim"></div>
+<div class="shell">
+<nav class="sidebar" id="sidebar">
+  <div class="sb-head">
+    <div class="sb-kicker">第 3 週 · 第 3 課</div>
+    <div class="sb-title">RAG 基礎</div>
+    <div class="sb-meta"><a href="index.html">課程索引</a> · <a href="02-tool-calling-mcp.html">← 第 2 課</a> · <a href="04-rag-evals.html">第 4 課 →</a></div>
+  </div>
+  <ul class="toc" id="toc"></ul>
+</nav>
+<main class="main">
+<div class="wrap">
+
+<header class="hero">
+  <div class="kicker">第 3 週 · 第 3 課</div>
+  <h1>RAG 基礎</h1>
+  <p class="lede">這一課結束時，你會有一個「金流串接文件問答」：使用者問技術問題，系統去文件裡找出相關段落，模型根據那些段落回答，而且<strong>附上引用</strong>。然後把它包成第三個工具，接到第 2 課的機器人上。</p>
+  <div class="facts">
+    <span class="fact">預估時間 <b>10–12 小時</b></span>
+    <span class="fact">前置 <b>第 1、2 課</b></span>
+    <span class="fact">產出 <b>文件問答 v1 + 失敗案例筆記</b></span>
+    <span class="fact">新東西 <b>Docker · pgvector · embedding</b></span>
+  </div>
+</header>
+
+<h2 id="s0"><span class="num">0</span>這一課要做到什麼</h2>
+
+<p>第 2 課的機器人能查<strong>交易資料</strong>，但查不了<strong>知識</strong>。使用者問「3D Secure 驗證失敗的錯誤碼有哪些」或「退刷要多久入帳」，這些答案在技術文件裡，不在資料庫的欄位裡。</p>
+
+<p>直覺的做法是把整份文件塞進 system prompt。但這行不通：</p>
+
+<div class="tw">
+<table>
+<thead><tr><th>問題</th><th>說明</th></tr></thead>
+<tbody>
+<tr><td><strong>貴</strong></td><td>一份 20 萬 token 的文件，每次對話都付一次錢。用 <code>claude-opus-5-5</code> 一次就是 $0.80，問 100 次就是 $80</td></tr>
+<tr><td><strong>慢</strong></td><td>輸入越長，首個 token 的延遲越高</td></tr>
+<tr><td><strong>品質反而下降</strong></td><td>大量無關內容會稀釋注意力，模型更容易抓錯重點</td></tr>
+<tr><td><strong>會超過上限</strong></td><td>文件庫一大就塞不下，而且你無法控制它成長</td></tr>
+</tbody>
+</table>
+</div>
+
+<p><strong>RAG（Retrieval-Augmented Generation，檢索增強生成）</strong>的做法是：先用程式找出最相關的那幾段，只把那幾段給模型。</p>
+
+<div class="flow">
+<svg viewBox="0 0 700 300" role="img" aria-label="RAG 的兩個階段">
+  <defs>
+    <marker id="a3" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 z" fill="currentColor"/>
+    </marker>
+  </defs>
+  <g font-family="-apple-system, sans-serif" font-size="11.5" fill="currentColor">
+    <text x="0" y="14" font-size="12" font-weight="700">離線：建立索引（文件變動時才做）</text>
+    <rect x="0" y="26" width="104" height="38" rx="5" fill="none" stroke="currentColor" stroke-opacity=".4"/>
+    <text x="12" y="43">公開技術</text><text x="12" y="58">文件</text>
+    <line x1="110" y1="45" x2="140" y2="45" stroke="currentColor" stroke-opacity=".5" marker-end="url(#a3)"/>
+    <rect x="148" y="26" width="90" height="38" rx="5" fill="none" stroke="currentColor" stroke-opacity=".4"/>
+    <text x="160" y="43">解析</text><text x="160" y="58">切塊</text>
+    <line x1="244" y1="45" x2="274" y2="45" stroke="currentColor" stroke-opacity=".5" marker-end="url(#a3)"/>
+    <rect x="282" y="26" width="110" height="38" rx="5" fill="none" stroke="currentColor" stroke-opacity=".4"/>
+    <text x="294" y="43">embedding</text><text x="294" y="58">轉成向量</text>
+    <line x1="398" y1="45" x2="428" y2="45" stroke="currentColor" stroke-opacity=".5" marker-end="url(#a3)"/>
+    <rect x="436" y="26" width="130" height="38" rx="5" fill="none" stroke="currentColor" stroke-opacity=".4"/>
+    <text x="448" y="43">寫入 pgvector</text><text x="448" y="58">+ 建索引</text>
+
+    <line x1="0" y1="86" x2="700" y2="86" stroke="currentColor" stroke-opacity=".15"/>
+
+    <text x="0" y="112" font-size="12" font-weight="700">線上：每次提問都跑一遍</text>
+    <rect x="0" y="124" width="104" height="38" rx="5" fill="none" stroke="currentColor" stroke-opacity=".4"/>
+    <text x="12" y="141">使用者</text><text x="12" y="156">的問題</text>
+    <line x1="110" y1="143" x2="140" y2="143" stroke="currentColor" stroke-opacity=".5" marker-end="url(#a3)"/>
+    <rect x="148" y="124" width="110" height="38" rx="5" fill="none" stroke="currentColor" stroke-opacity=".4"/>
+    <text x="160" y="141">問題也轉成</text><text x="160" y="156">向量</text>
+    <line x1="264" y1="143" x2="294" y2="143" stroke="currentColor" stroke-opacity=".5" marker-end="url(#a3)"/>
+    <rect x="302" y="124" width="120" height="38" rx="5" fill="none" stroke="currentColor" stroke-opacity=".4"/>
+    <text x="314" y="141">向量搜尋</text><text x="314" y="156">取最近的 k 段</text>
+    <line x1="428" y1="143" x2="458" y2="143" stroke="currentColor" stroke-opacity=".5" marker-end="url(#a3)"/>
+    <rect x="466" y="124" width="100" height="38" rx="5" fill="none" stroke="currentColor" stroke-opacity=".4"/>
+    <text x="478" y="141">組 prompt</text><text x="478" y="156">段落 + 問題</text>
+    <line x1="572" y1="143" x2="602" y2="143" stroke="currentColor" stroke-opacity=".5" marker-end="url(#a3)"/>
+    <rect x="610" y="124" width="88" height="38" rx="5" fill="none" stroke="currentColor" stroke-opacity=".4"/>
+    <text x="622" y="141">模型生成</text><text x="622" y="156">帶引用</text>
+
+    <text x="0" y="200" font-size="11.5" fill-opacity=".75">關鍵觀念一：模型沒有「學會」你的文件。它只是在回答當下讀到了那幾段。</text>
+    <text x="0" y="222" font-size="11.5" fill-opacity=".75">關鍵觀念二：RAG 的品質上限由「檢索」決定。檢索沒撈到正確段落，</text>
+    <text x="14" y="242" font-size="11.5" fill-opacity=".75">再強的模型也答不出來 —— 它看不到答案。</text>
+    <text x="0" y="272" font-size="11.5" fill-opacity=".75">所以第 4 週整整一週都在量「檢索撈得準不準」，而不是在調模型。</text>
+  </g>
+</svg>
+</div>
+
+<div class="deliver">
+  <p class="bt">本週產出</p>
+  <ol>
+    <li><strong>文件問答 v1</strong>：能回答金流串接的技術問題，而且附上引用的文件段落。</li>
+    <li><strong>一份「檢索失敗案例」筆記</strong>：用兩種切塊大小各跑 10 個問題，記下哪些問題檢索失敗、為什麼。</li>
+  </ol>
+  <p>那份筆記比程式碼更重要——<strong>它直接變成第 4 週黃金測試集的內容</strong>。第 4 週要量「改動前後 recall@5 從多少到多少」，沒有這份失敗案例清單就沒得量。</p>
+</div>
+
+<div class="box danger">
+  <p class="bt">資料來源：只用公開文件</p>
+  <p>這是整個八週計畫的硬性限制。本週要收集金流串接文件，<strong>只能用公開在網路上的技術文件</strong>（例如 Stripe、綠界、藍新這類金流商的公開 API 文件），不要碰公司內部文件、不要用真實的交易紀錄或卡號。</p>
+  <p>這不只是合規考量，也是作品集考量——<strong>你的 repo 要能公開給招募方看</strong>。裡面有一份不能公開的文件，整個專案就不能放上 GitHub。</p>
+</div>
+
+<h2 id="s1"><span class="num">1</span>用 Docker 起 Postgres + pgvector</h2>
+
+<h3>為什麼是 Postgres 而不是專門的向量資料庫</h3>
+
+<p>市面上有 Pinecone、Weaviate、Qdrant、Chroma 等專門的向量資料庫。這個計畫選 <strong>pgvector</strong>（Postgres 的擴充套件）的理由是：</p>
+
+<ul>
+  <li><strong>你已經會 SQL</strong>。向量搜尋變成一個 <code>ORDER BY</code>，不用另學一套查詢語言和一套維運方式。</li>
+  <li><strong>可以和關聯式資料混用</strong>。「找出和這個問題相關、而且 <code>source = '綠界'</code>、而且 <code>version >= 2</code> 的段落」——這在純向量資料庫裡要另外處理，在 Postgres 裡就是 <code>WHERE</code>。</li>
+  <li><strong>第 4 週要做 hybrid search</strong>，需要關鍵字檢索（BM25 / 全文檢索）和向量檢索結合。Postgres 兩個都有。</li>
+  <li><strong>面試加分</strong>。「我用 Postgres + pgvector，因為我們的資料本來就在 Postgres，不想為了向量搜尋多維護一套系統」是一個成熟的工程判斷，比「我用了 Pinecone」更有說服力。</li>
+</ul>
+
+<h3 id="s1-docker">docker compose 設定</h3>
+
+<div class="cb" data-lang="yaml" data-file="compose.yaml">
+<pre><code>services:
+  db:
+    image: pgvector/pgvector:pg17
+    container_name: rag-postgres
+    environment:
+      POSTGRES_USER: rag
+      POSTGRES_PASSWORD: ragpass
+      POSTGRES_DB: ragdb
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rag -d ragdb"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  pgdata:</code></pre>
+</div>
+
+<div class="box tip">
+  <p class="bt">三個刻意的設定</p>
+  <ul>
+    <li><strong><code>pgvector/pgvector:pg17</code></strong>——這是官方預先裝好 pgvector 擴充的映像。用一般的 <code>postgres</code> 映像的話，你得自己編譯安裝擴充，很麻煩。</li>
+    <li><strong><code>"5433:5432"</code></strong>——把容器的 5432 對應到你機器的 <strong>5433</strong>。如果你本機已經裝了 Postgres（很多人有），用 5432 會衝突，而錯誤訊息通常是「連得上但資料庫不存在」這種很難懂的狀況。換個 port 省事。</li>
+    <li><strong><code>volumes: pgdata</code></strong>——資料存在具名 volume 裡，<code>docker compose down</code> 之後資料還在。沒有這個的話容器一刪資料就沒了，你得重新 embedding（要花錢）。</li>
+  </ul>
+</div>
+
+<div class="box warn">
+  <p class="bt">檔名用 compose.yaml，不要用 docker-compose.yml</p>
+  <p>兩個理由。第一，<code>compose.yaml</code> 是 Docker Compose v2 的官方建議檔名。第二，<strong>這個 repo 的 <code>.gitignore</code> 繼承自一個 Visual Studio 模板，裡面有一條 <code>docker-compose.yml</code></strong>——用那個檔名的話，你 <code>git add</code> 會被靜默忽略，沒有任何錯誤訊息。</p>
+</div>
+
+<div class="cb" data-lang="bash" data-file="終端機">
+<pre><code># 啟動（-d 是背景執行）
+docker compose up -d
+
+# 看狀態，healthy 才算真的好了
+docker compose ps
+
+# 進到資料庫裡面看看
+docker compose exec db psql -U rag -d ragdb
+
+# 停掉（資料保留）
+docker compose down
+
+# 停掉並刪除資料（要重新 embedding，會花錢，想清楚再按）
+docker compose down -v</code></pre>
+</div>
+
+<h3 id="s1-ext">啟用擴充與建表</h3>
+
+<div class="anno">
+<div class="anno-head">資料表設計 · 點標記看說明</div>
+<div class="cb" data-lang="sql" data-file="schema.sql" data-anno="1">
+<pre><code>CREATE EXTENSION IF NOT EXISTS vector;
+
+CREATE TABLE IF NOT EXISTS chunks (
+    id          bigserial PRIMARY KEY,
+    source      text        NOT NULL,
+    doc_title   text        NOT NULL,
+    heading     text,
+    url         text,
+    chunk_index int         NOT NULL,
+    content     text        NOT NULL,
+    token_count int         NOT NULL,
+    embedding   vector(1024) NOT NULL,
+    created_at  timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS chunks_source_idx ON chunks (source);</code></pre>
+</div>
+<div class="notes">
+  <div class="note" data-line="1"><div class="note-n">1</div><div>啟用 pgvector。<strong>每個資料庫只要跑一次</strong>，但加 <code>IF NOT EXISTS</code> 讓腳本可以重複執行。</div></div>
+  <div class="note" data-line="5"><div class="note-n">2</div><div><code>source</code>：這段來自哪個文件來源（綠界、Stripe…）。<strong>之後要用它做 metadata 篩選</strong>，所以單獨開一欄而不是埋在內容裡。</div></div>
+  <div class="note" data-line="7"><div class="note-n">3</div><div><code>heading</code>：這段所屬的章節標題。<strong>這一欄是回答品質的關鍵</strong>——切塊會讓段落失去上下文，把標題存下來可以補回來，<a href="#s3-lost">第 3 節</a>詳述。</div></div>
+  <div class="note" data-line="8"><div class="note-n">4</div><div><code>url</code>：原始文件的網址。<strong>引用要能點回去</strong>，不然使用者無法查證。</div></div>
+  <div class="note" data-line="9"><div class="note-n">5</div><div><code>chunk_index</code>：這是文件裡的第幾塊。用來把相鄰的塊接回去，也方便 debug。</div></div>
+  <div class="note" data-line="11"><div class="note-n">6</div><div><code>token_count</code>：存下來才能分析「切塊大小的分布對不對」，也能在組 prompt 前估算總長度。</div></div>
+  <div class="note" data-line="12"><div class="note-n">7</div><div><strong><code>vector(1024)</code> 是 pgvector 的型別，括號裡是維度，必須和你的 embedding 模型一致</strong>。對不上會在插入時直接報錯。pgvector 的一般向量上限是 2000 維。</div></div>
+  <div class="note" data-line="16"><div class="note-n">8</div><div>給 <code>source</code> 建一般索引，metadata 篩選才快。<strong>注意向量索引還沒建</strong>——那要等資料載完才建，<a href="#s4-index">第 4 節</a>說明原因。</div></div>
+</div>
+</div>
+
+<h3 id="s1-psycopg">用 Python 連進去</h3>
+
+<div class="cb" data-lang="bash" data-file="終端機">
+<pre><code>uv add "psycopg[binary]" pgvector</code></pre>
+</div>
+
+<div class="box py">
+  <p class="bt">是 <code>psycopg</code>（第 3 版），不是 <code>psycopg2</code></p>
+  <p>Python 的 Postgres 驅動有兩代。<code>psycopg2</code> 是舊版，網路上大多數教學用它；<code>psycopg</code>（沒有數字，版本號是 3.x）是新版，API 比較現代而且支援 async。<strong>新專案用 <code>psycopg</code>。</strong></p>
+  <p><code>[binary]</code> 表示裝預先編譯好的版本，不需要本機有 C 編譯器和 Postgres 開發標頭檔——在 Mac 上這會省掉很多麻煩。</p>
+</div>
+
+<div class="cb" data-lang="python" data-file="db.py">
+<pre><code>import os
+import psycopg
+from pgvector.psycopg import register_vector
+
+DSN = os.getenv(
+    "DATABASE_URL",
+    "postgresql://rag:ragpass@localhost:5433/ragdb",
+)
+
+
+def connect() -> psycopg.Connection:
+    """開一個連線，並註冊 vector 型別。"""
+    conn = psycopg.connect(DSN)
+    register_vector(conn)      # 少了這行，vector 欄位會變成字串
+    return conn</code></pre>
+</div>
+
+<div class="box danger">
+  <p class="bt">忘記 <code>register_vector(conn)</code> 的症狀</p>
+  <p>插入時 psycopg 不知道怎麼把 Python 的 list 轉成 <code>vector</code>，會報型別錯誤；查詢時回來的向量會變成一長串字串而不是數值陣列。<strong>這兩種錯誤訊息都不會提到 <code>register_vector</code></strong>，所以先記住它。</p>
+  <p>每開一個新連線都要呼叫一次。所以把它包進 <code>connect()</code> 裡，不要散落在各處。</p>
+</div>
+
+<h2 id="s2"><span class="num">2</span>Embedding：把文字變成可以比較的數字</h2>
+
+<h3>概念</h3>
+
+<p>Embedding 模型把一段文字轉成一串固定長度的數字（<strong>向量</strong>），例如 1024 個小數。這串數字的特性是：<strong>意思相近的文字，向量在空間中的位置也相近。</strong></p>
+
+<div class="cb" data-lang="text">
+<pre><code>"退刷多久會入帳"       → [0.021, -0.183, 0.094, ...]  ┐ 這兩個向量
+"退款需要幾個工作天"   → [0.019, -0.177, 0.101, ...]  ┘ 距離很近
+
+"3D Secure 怎麼啟用"   → [-0.144, 0.302, -0.055, ...]   距離遠</code></pre>
+</div>
+
+<p>所以「找出和問題相關的段落」就變成一個數學問題：<strong>找出向量距離最近的那幾段</strong>。這就是為什麼它快——不需要讀過每一段，資料庫用索引就能找。</p>
+
+<h3 id="s2-noembed">第一個重要事實：Anthropic 沒有 embedding 模型</h3>
+
+<div class="box danger">
+  <p class="bt">你的 Anthropic API key 不能拿來做 embedding</p>
+  <p>Claude 只有生成模型，<strong>Anthropic 官方文件明講「Anthropic does not offer its own embedding model」</strong>。所以這一步你需要另一個供應商。</p>
+  <p>很多人在這裡卡住，因為前兩課都只用 Anthropic 的 key，會自然以為 embedding 也在同一個 API 裡。</p>
+</div>
+
+<h3 id="s2-choose">選哪一個</h3>
+
+<div class="tw">
+<table>
+<thead><tr><th>選項</th><th>優點</th><th>要考慮的</th></tr></thead>
+<tbody>
+<tr><td><strong>Voyage AI</strong><br><span class="small">Anthropic 官方推薦</span></td><td>多語言品質好；<strong>有 <code>voyage-finance-2</code> 這個金融領域專用模型</strong>；有 rerank 模型（第 4 週要用）</td><td>要再辦一個帳號和 key</td></tr>
+<tr><td><strong>OpenAI embeddings</strong></td><td>你第 1 課已經有 key 了，少一個帳號</td><td>沒有金融領域特化模型</td></tr>
+<tr><td><strong>本機模型（Ollama）</strong></td><td>免費、無限次實驗、<strong>資料完全不出本機</strong></td><td>品質較差；要自己確認中文支援</td></tr>
+</tbody>
+</table>
+</div>
+
+<div class="box tip">
+  <p class="bt">以你的金流背景，這裡有個很好的面試素材</p>
+  <p>「哪些資料可以送到外部 embedding API，哪些必須用本機模型」是金融業真實會遇到的問題。<strong>建議你兩種都接起來，用同一組測試比較品質差多少</strong>——然後你就能具體回答「本機模型在我們的場景下 recall 掉了多少，值不值得為了資料不出境付這個代價」。</p>
+  <p>這比空泛地說「我考慮過資料安全」有力得多，也呼應第 7 週的合規主題。</p>
+</div>
+
+<h3>Voyage 的用法</h3>
+
+<div class="cb" data-lang="bash" data-file="終端機">
+<pre><code>uv add voyageai
+# 在 .env 加上 VOYAGE_API_KEY=pa-xxxx</code></pre>
+</div>
+
+<div class="anno">
+<div class="anno-head">embedding 的呼叫 · 點標記看說明</div>
+<div class="cb" data-lang="python" data-file="embedding.py" data-anno="2">
+<pre><code>import voyageai
+
+vo = voyageai.Client()          # 自動讀 VOYAGE_API_KEY
+
+MODEL = "voyage-4"
+DIMENSION = 1024
+
+
+def embed_documents(texts: list[str]) -> list[list[float]]:
+    """把文件段落轉成向量（建立索引時用）。"""
+    result = vo.embed(texts, model=MODEL, input_type="document")
+    return result.embeddings
+
+
+def embed_query(text: str) -> list[float]:
+    """把使用者的問題轉成向量（檢索時用）。"""
+    result = vo.embed([text], model=MODEL, input_type="query")
+    return result.embeddings[0]</code></pre>
+</div>
+<div class="notes">
+  <div class="note" data-line="3"><div class="note-n">1</div><div>和 Anthropic SDK 一樣，不要把 key 寫進程式碼，讓它自己讀環境變數。</div></div>
+  <div class="note" data-line="5"><div class="note-n">2</div><div>模型名稱和維度<strong>寫成常數綁在一起</strong>。維度必須和資料表的 <code>vector(1024)</code> 一致，放在一起才不會改了一個忘了另一個。</div></div>
+  <div class="note" data-line="11"><div class="note-n">3</div><div><code>vo.embed()</code> 吃一個 list，<strong>一次送多段比一段一段送快很多也便宜</strong>（少掉每次的網路往返）。建索引時務必批次送。</div></div>
+  <div class="note" data-line="17"><div class="note-n">4</div><div>查詢時雖然只有一段文字，<strong>還是要包成 list</strong>，然後取 <code>[0]</code>。這是 API 的形狀。</div></div>
+</div>
+</div>
+
+<h3 id="s2-inputtype"><code>input_type</code>：最容易漏掉、而且漏掉不會報錯</h3>
+
+<div class="box danger">
+  <p class="bt">文件用 <code>"document"</code>，問題用 <code>"query"</code>，兩個都不能省</p>
+  <p>Voyage 會依照 <code>input_type</code> <strong>在文字前面加上不同的提示句</strong>再做 embedding：查詢加的是「Represent the query for retrieving supporting documents:」，文件加的是「Represent the document for retrieval:」。</p>
+  <p>這讓問句和文件段落被放到更適合互相比對的向量空間位置。<strong>省略或設成 <code>None</code> 會讓檢索品質下降，但程式照跑、沒有任何錯誤訊息</strong>——你只會覺得「這個 RAG 怎麼不太準」。</p>
+</div>
+
+<div class="box warn">
+  <p class="bt">另一個同類的坑：索引和查詢必須用同一個模型</p>
+  <p>不同 embedding 模型產生的向量<strong>完全不能互相比較</strong>，即使維度剛好一樣。所以：</p>
+  <ul>
+    <li>換 embedding 模型 = <strong>整個資料庫要重新 embedding</strong>，不是改個設定就好。</li>
+    <li>把模型名稱也存進資料表（或至少寫進 README），不然三個月後你會忘記這批向量是用什麼做的。</li>
+  </ul>
+  <p>這是 RAG 專案最常見的「怎麼突然全部查不到了」的原因。</p>
+</div>
+
+<h2 id="s3"><span class="num">3</span>文件準備與切塊</h2>
+
+<p>切塊（chunking）是 RAG 裡<strong>最影響品質、而且最沒有標準答案</strong>的一步。這一節會解釋各種策略的取捨，但本週實作任務要你<strong>親自比較兩種切塊大小</strong>——因為最佳值取決於你的文件和你的問題，不是查得到的常數。</p>
+
+<h3 id="s3-source">文件來源</h3>
+
+<p>找公開的金流串接技術文件。幾個方向：</p>
+
+<ul>
+  <li>國際金流商的公開 API 文件（Stripe 的文件結構清楚、範例多，適合當第一份）</li>
+  <li>國內金流商公開在官網的技術串接文件（綠界、藍新等都有公開的 API 說明）</li>
+  <li>卡組織公開的錯誤碼與規範說明</li>
+</ul>
+
+<div class="box warn">
+  <p class="bt">抓取網頁前先看一下對方的規則</p>
+  <p>要大量抓取時，先看 <code>robots.txt</code> 和網站的使用條款，控制請求頻率（加個 <code>time.sleep(1)</code>），別把人家的站打爆。本週的量級很小（幾十頁），手動存成檔案其實也完全可行，而且更快。</p>
+  <p><strong>建議：先手動存 20–30 頁就好。</strong>這一課的重點是切塊和檢索，不是寫爬蟲。文件數量太少反而會讓你看不出檢索的問題——但 20–30 頁已經夠產生失敗案例了。</p>
+</div>
+
+<h3>為什麼要切塊</h3>
+
+<ol>
+  <li><strong>embedding 模型有長度上限</strong>（Voyage 4 系列是 32,000 token），整份文件塞不進去。</li>
+  <li><strong>更根本的理由：一個向量只能表達一個意思。</strong>把一整份 50 頁的文件壓成 1024 個數字，那些數字會是所有主題的「平均」，對任何具體問題都不夠近。</li>
+  <li>檢索出來的東西要放進 prompt，太大塊就失去 RAG 省 token 的意義。</li>
+</ol>
+
+<h3 id="s3-fixed">策略一：固定長度切</h3>
+
+<div class="cb" data-lang="python" data-file="chunking.py">
+<pre><code>def chunk_fixed(text: str, size: int = 500, overlap: int = 80) -> list[str]:
+    """固定字數切塊，相鄰塊之間重疊 overlap 個字。"""
+    if size <= overlap:
+        raise ValueError("size 必須大於 overlap，否則會無限迴圈")
+
+    chunks = []
+    start = 0
+    while start < len(text):
+        end = start + size
+        chunks.append(text[start:end])
+        start = end - overlap          # 往回退一點，製造重疊
+    return chunks</code></pre>
+</div>
+
+<div class="box py">
+  <p class="bt"><code>text[start:end]</code> 是切片（slicing）</p>
+  <p>Python 的切片取「從 start 到 end 之前」的子字串，<strong>不包含 end</strong>。而且切片<strong>不會越界報錯</strong>——<code>text[0:999999]</code> 在只有 100 個字的字串上會安靜地回傳整個字串。這個特性讓上面的迴圈不需要特別處理最後一塊。</p>
+</div>
+
+<h4>overlap 是做什麼的</h4>
+
+<p>如果不重疊，一個句子剛好被切在中間時，兩邊都殘缺：</p>
+
+<div class="cb" data-lang="text">
+<pre><code>沒有 overlap：
+  塊 1：「…退刷申請送出後，款項會在」
+  塊 2：「3 至 7 個工作天內退回原卡…」
+  → 問「退刷要多久」時，兩塊都不完整，檢索可能兩塊都不夠相近
+
+有 overlap（重疊 80 字）：
+  塊 1：「…退刷申請送出後，款項會在 3 至 7 個工作天內退回原卡…」
+  塊 2：「…款項會在 3 至 7 個工作天內退回原卡，若超過期限請…」
+  → 完整的句子至少出現在一塊裡</code></pre>
+</div>
+
+<p>代價是儲存和 embedding 成本增加（重疊的部分被處理兩次）。<strong>常見比例是塊大小的 10–20%。</strong></p>
+
+<h3 id="s3-structure">策略二：依標題結構切（技術文件建議用這個）</h3>
+
+<p>技術文件通常有清楚的標題層級。<strong>依標題切，每一塊天生就是一個完整的主題</strong>，比按字數硬切合理得多：</p>
+
+<div class="cb" data-lang="python" data-file="chunking.py">
+<pre><code>import re
+from dataclasses import dataclass
+
+
+@dataclass
+class Chunk:
+    content: str
+    heading: str
+    chunk_index: int
+
+
+def chunk_by_heading(markdown: str, max_size: int = 1200) -> list[Chunk]:
+    """依 Markdown 標題切塊；單一章節過大時再按段落切開。"""
+    # 以 ## 或 ### 開頭的行當分隔點
+    parts = re.split(r"\n(?=#{2,3} )", markdown)
+
+    chunks: list[Chunk] = []
+    for part in parts:
+        part = part.strip()
+        if not part:
+            continue
+
+        first_line = part.split("\n", 1)[0]
+        heading = first_line.lstrip("#").strip() if first_line.startswith("#") else ""
+
+        if len(part) <= max_size:
+            chunks.append(Chunk(part, heading, len(chunks)))
+            continue
+
+        # 章節太大：按空行分段，累積到接近上限才切
+        buf = ""
+        for para in part.split("\n\n"):
+            if len(buf) + len(para) > max_size and buf:
+                chunks.append(Chunk(buf.strip(), heading, len(chunks)))
+                buf = ""
+            buf += para + "\n\n"
+        if buf.strip():
+            chunks.append(Chunk(buf.strip(), heading, len(chunks)))
+
+    return chunks</code></pre>
+</div>
+
+<div class="box py">
+  <p class="bt"><code>r"\n(?=#{2,3} )"</code> 這個正規表示式</p>
+  <ul>
+    <li><code>r"..."</code> 是 <strong>raw string</strong>，裡面的 <code>\n</code> 不會被 Python 先解讀。寫正規表示式一律加 <code>r</code> 前綴。</li>
+    <li><code>(?=...)</code> 是<strong>前瞻斷言（lookahead）</strong>：「這個位置後面要符合這個樣式，但不要把它吃掉」。所以切完之後標題還留在後面那一塊的開頭——這正是我們要的。</li>
+    <li><code>#{2,3}</code> 表示 2 到 3 個 <code>#</code>，也就是 <code>##</code> 和 <code>###</code>。不切 <code>#</code>（文件標題）是因為那通常只有一個。</li>
+  </ul>
+</div>
+
+<h3 id="s3-lost">切塊最大的問題：段落失去上下文</h3>
+
+<div class="box danger">
+  <p class="bt">這是 RAG 品質問題的頭號來源</p>
+  <p>看這個被切出來的塊：</p>
+  <div class="cb" data-lang="text"><pre><code>「此欄位為必填，長度上限 20 字元。若未帶入，交易將以錯誤碼 14 退回。」</code></pre></div>
+  <p>這段話在原文裡很清楚，因為上面有標題「<strong>MerchantTradeNo（訂單編號）</strong>」。但<strong>切出來之後，「此欄位」指的是什麼完全不知道了</strong>。</p>
+  <p>更糟的是：使用者問「訂單編號有什麼限制」時，<strong>這一塊的向量裡根本沒有「訂單編號」這個概念</strong>，所以檢索撈不到它。這不是模型笨，是你的索引裡就沒有可以匹配的東西。</p>
+</div>
+
+<p>最簡單有效的解法：<strong>把標題拼回內容再做 embedding</strong>。</p>
+
+<div class="cb" data-lang="python" data-file="chunking.py">
+<pre><code>def text_for_embedding(chunk: Chunk, doc_title: str) -> str:
+    """做 embedding 時用的文字 —— 把上下文補回去。"""
+    parts = [doc_title]
+    if chunk.heading:
+        parts.append(chunk.heading)
+    parts.append(chunk.content)
+    return "\n\n".join(parts)
+
+
+# 注意：embedding 用補過上下文的版本，但「存進資料庫、之後給模型看」的
+# 是原始 content + 另外存的 heading 欄位。兩者用途不同，不要混在一起。</code></pre>
+</div>
+
+<div class="box tip">
+  <p class="bt">進階選項：contextualized chunk embedding</p>
+  <p>Voyage 有一組 <code>voyage-context-4</code> 模型，<strong>直接產生「帶有完整文件上下文」的塊級向量，不需要你手動拼標題</strong>，而且 context length 到 120,000。</p>
+  <p>本週建議先用手動拼標題的做法，<strong>因為你要先親身體會「失去上下文」這個問題</strong>。體會過之後再去試 <code>voyage-context-4</code>，你才知道它解決的是什麼，也才能在第 4 週的對照表裡量出它的效果。</p>
+</div>
+
+<h3>表格和程式碼區塊怎麼辦</h3>
+
+<div class="tw">
+<table>
+<thead><tr><th>內容類型</th><th>問題</th><th>處理方式</th></tr></thead>
+<tbody>
+<tr><td><strong>表格</strong><br><span class="small">錯誤碼對照表、參數表</span></td><td>按字數切會把表頭和資料列拆開，剩下的資料列完全沒意義</td><td>整張表當一塊，不要切。表格大到放不下時，<strong>每一列都帶上表頭</strong>再切</td></tr>
+<tr><td><strong>程式碼範例</strong></td><td>切一半的程式碼沒有用；而且程式碼的 embedding 相似度行為和散文不同</td><td>整段 code block 不切。<strong>前後的說明文字要留在同一塊</strong>，不然只有程式碼沒有解釋，檢索撈不到</td></tr>
+<tr><td><strong>API 參數說明</strong></td><td>就是上面「失去上下文」的典型案例</td><td>每個參數的說明<strong>都要帶上參數名稱和所屬端點</strong></td></tr>
+</tbody>
+</table>
+</div>
+
+<div class="box warn">
+  <p class="bt">金流文件特別容易踩的一個坑</p>
+  <p>金流的 API 文件裡，<strong>錯誤碼表格和參數表格佔了很大比例</strong>，而這正是按字數硬切最會壞掉的地方。如果你發現「問錯誤碼的問題檢索都很爛」，九成是表格被切壞了。</p>
+  <p>把它記進失敗案例筆記——這就是第 4 週要用 hybrid search 的理由之一：<strong>錯誤碼這類精確字串，關鍵字檢索比向量檢索可靠得多。</strong></p>
+</div>
+
+<h2 id="s4"><span class="num">4</span>寫入向量庫</h2>
+
+<h3>批次寫入</h3>
+
+<div class="cb" data-lang="python" data-file="ingest.py">
+<pre><code>def ingest(chunks: list[Chunk], source: str, doc_title: str, url: str) -> int:
+    """把切好的塊做 embedding 並寫進資料庫。回傳寫入筆數。"""
+    texts = [text_for_embedding(c, doc_title) for c in chunks]
+
+    # 分批送 embedding —— 一次全送可能超過 API 的單次上限
+    vectors: list[list[float]] = []
+    BATCH = 64
+    for i in range(0, len(texts), BATCH):
+        vectors.extend(embed_documents(texts[i:i + BATCH]))
+        print(f"  embedding {min(i + BATCH, len(texts))}/{len(texts)}")
+
+    rows = [
+        (source, doc_title, c.heading, url, c.chunk_index,
+         c.content, len(c.content), v)
+        for c, v in zip(chunks, vectors)
+    ]
+
+    with connect() as conn:
+        with conn.cursor() as cur:
+            cur.executemany(
+                """INSERT INTO chunks
+                   (source, doc_title, heading, url, chunk_index,
+                    content, token_count, embedding)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s)""",
+                rows,
+            )
+        conn.commit()
+
+    return len(rows)</code></pre>
+</div>
+
+<div class="box py">
+  <p class="bt">兩個 Python 細節</p>
+  <ul>
+    <li><strong><code>zip(chunks, vectors)</code></strong>：把兩個等長的 list 配對成 <code>(chunk, vector)</code> 的序列。如果長度不一樣，<strong><code>zip</code> 會安靜地在短的那個結束</strong>——不會報錯。所以 embedding 如果少回傳幾個，你會靜默少寫幾筆資料。謹慎一點可以先 <code>assert len(chunks) == len(vectors)</code>。</li>
+    <li><strong><code>range(0, len(texts), BATCH)</code></strong>：第三個參數是步長，所以這會產生 0, 64, 128…，配合切片就是分批。</li>
+  </ul>
+  <p>另外注意 psycopg 的佔位符是 <code>%s</code>（不是第 2 課 sqlite3 的 <code>?</code>），但<strong>原則完全一樣：永遠不要用字串拼接組 SQL</strong>。</p>
+</div>
+
+<h3 id="s4-index">建立向量索引（資料載完之後）</h3>
+
+<div class="cb" data-lang="sql" data-file="index.sql">
+<pre><code>-- 餘弦距離的 HNSW 索引
+CREATE INDEX IF NOT EXISTS chunks_embedding_idx
+    ON chunks USING hnsw (embedding vector_cosine_ops);</code></pre>
+</div>
+
+<div class="box warn">
+  <p class="bt">三件必須對上的事</p>
+  <ol>
+    <li><strong>索引要在資料載完之後才建。</strong>pgvector 官方明說「像其他索引型別一樣，載入初始資料之後再建索引比較快」。先建索引再灌資料，每一筆插入都要更新索引，慢很多。</li>
+    <li><strong>索引的 operator class 必須和你查詢用的距離運算子一致。</strong>建了 <code>vector_cosine_ops</code> 的索引，查詢就要用 <code>&lt;=&gt;</code>（餘弦距離）。用成 <code>&lt;-&gt;</code>（L2）的話<strong>查詢仍然會正確執行，但走不到索引</strong>——資料少時你完全看不出來，資料多了之後會突然變很慢。</li>
+    <li><strong>維度要對上。</strong><code>vector(1024)</code> 和你的 embedding 模型輸出必須一致。</li>
+  </ol>
+</div>
+
+<h3>距離運算子對照</h3>
+
+<div class="tw">
+<table>
+<thead><tr><th>運算子</th><th>距離</th><th>索引 operator class</th><th>備註</th></tr></thead>
+<tbody>
+<tr><td><code>&lt;=&gt;</code></td><td>餘弦距離</td><td><code>vector_cosine_ops</code></td><td><strong>文字檢索最常用</strong></td></tr>
+<tr><td><code>&lt;-&gt;</code></td><td>L2（歐幾里得）</td><td><code>vector_l2_ops</code></td><td></td></tr>
+<tr><td><code>&lt;#&gt;</code></td><td>負內積</td><td><code>vector_ip_ops</code></td><td>注意是「負」的，所以也是越小越近</td></tr>
+<tr><td><code>&lt;+&gt;</code></td><td>L1（曼哈頓）</td><td><code>vector_l1_ops</code></td><td></td></tr>
+</tbody>
+</table>
+</div>
+
+<div class="box tip">
+  <p class="bt">Voyage 的向量已經正規化，所以三種距離排序一樣</p>
+  <p>Voyage 的 embedding 長度都是 1，這種情況下<strong>餘弦相似度和內積相同，而且餘弦距離和歐幾里得距離排出來的順序完全一致</strong>。</p>
+  <p>所以用哪個都不影響結果，<strong>但要和索引的 operator class 對上</strong>。本課統一用餘弦（<code>&lt;=&gt;</code> + <code>vector_cosine_ops</code>），因為它是文字檢索的慣例，也不依賴「向量已正規化」這個前提——換成別家的 embedding 模型時比較不會出事。</p>
+</div>
+
+<h3>HNSW 還是 IVFFlat</h3>
+
+<div class="tw">
+<table>
+<thead><tr><th></th><th>HNSW</th><th>IVFFlat</th></tr></thead>
+<tbody>
+<tr><td>查詢效能</td><td><strong>較好</strong></td><td>較差</td></tr>
+<tr><td>建索引速度</td><td>較慢</td><td><strong>較快</strong></td></tr>
+<tr><td>記憶體</td><td>較高</td><td><strong>較低</strong></td></tr>
+<tr><td>需要訓練階段</td><td><strong>不需要</strong></td><td>需要（所以更要先有資料）</td></tr>
+</tbody>
+</table>
+</div>
+
+<p><strong>本週用 HNSW。</strong>你的資料量很小（幾千塊），建索引的時間差異感覺不出來，而查詢品質比較好。IVFFlat 要到資料量很大、記憶體吃緊時才值得考慮。</p>
+
+<h2 id="s5"><span class="num">5</span>檢索</h2>
+
+<div class="anno">
+<div class="anno-head">向量搜尋 · 點標記看說明</div>
+<div class="cb" data-lang="python" data-file="retrieval.py" data-anno="3">
+<pre><code>from dataclasses import dataclass
+
+
+@dataclass
+class Hit:
+    id: int
+    content: str
+    heading: str
+    doc_title: str
+    source: str
+    url: str
+    distance: float
+
+
+def search(query: str, k: int = 5, source: str | None = None) -> list[Hit]:
+    qv = embed_query(query)
+
+    sql = """
+        SELECT id, content, heading, doc_title, source, url,
+               embedding <=> %s AS distance
+        FROM chunks
+        {where}
+        ORDER BY embedding <=> %s
+        LIMIT %s
+    """
+    params: list = [qv]
+    where = ""
+    if source:
+        where = "WHERE source = %s"
+        params.append(source)
+    params.extend([qv, k])
+
+    with connect() as conn:
+        rows = conn.execute(sql.format(where=where), params).fetchall()
+
+    return [Hit(*row) for row in rows]</code></pre>
+</div>
+<div class="notes">
+  <div class="note" data-line="5"><div class="note-n">1</div><div>用 <code>@dataclass</code> 而不是 dict，取值時有自動完成、拼錯欄位名會立刻報錯。這是第 1 課提過的原則：<strong>程式內部自己算出來的資料用 dataclass，外部來的才用 Pydantic。</strong></div></div>
+  <div class="note" data-line="16"><div class="note-n">2</div><div>問題要用 <code>embed_query</code>（<code>input_type="query"</code>），<strong>不是 <code>embed_documents</code></strong>。見 <a href="#s2-inputtype">§2</a>。</div></div>
+  <div class="note" data-line="20"><div class="note-n">3</div><div>把距離一起選出來。<strong>你需要這個數字來判斷「撈到的東西到底有多相關」</strong>——沒有它就無法設相關性門檻，也無法 debug。</div></div>
+  <div class="note" data-line="23"><div class="note-n">4</div><div><code>ORDER BY embedding &lt;=&gt; %s</code> 就是整個向量搜尋。<strong>注意這裡的運算子要和索引的 operator class 一致</strong>，否則走不到索引。</div></div>
+  <div class="note" data-line="31"><div class="note-n">5</div><div>查詢向量在 SQL 裡出現兩次（SELECT 和 ORDER BY），所以參數也要傳兩次。順序必須和 <code>%s</code> 出現的順序一致。</div></div>
+  <div class="note" data-line="29"><div class="note-n">6</div><div><strong>metadata 篩選就是普通的 <code>WHERE</code></strong>——這是用 Postgres 的最大好處。「只找綠界的文件」「只找 2024 年之後更新的」都是這樣加。</div></div>
+  <div class="note" data-line="34"><div class="note-n">7</div><div>這裡用 <code>.format()</code> 組 SQL <strong>只因為 <code>where</code> 是我們自己寫死的字串，不是外部輸入</strong>。真正的值一律走參數化（<code>%s</code>）。把使用者輸入 format 進 SQL 就是第 2 課講的 injection 漏洞。</div></div>
+</div>
+</div>
+
+<h3>k 要設多少</h3>
+
+<div class="tw">
+<table>
+<thead><tr><th>k</th><th>效果</th></tr></thead>
+<tbody>
+<tr><td>太小（1–2）</td><td>正確答案常常不在裡面。而且<strong>模型看不到就答不出來</strong>，不管它多聰明</td></tr>
+<tr><td>剛好（3–8）</td><td>多數情況的起點。<strong>本週從 5 開始</strong></td></tr>
+<tr><td>太大（20+）</td><td>塞進去的無關內容會稀釋注意力、增加成本，而且會讓模型更容易被不相關的段落帶偏</td></tr>
+</tbody>
+</table>
+</div>
+
+<div class="box tip">
+  <p class="bt">k 是第 4 週要量的東西，不是現在猜的</p>
+  <p>第 4 週的 <strong>recall@k</strong> 指標就是在回答「k 設多少時，正確答案有多少比例會被撈進來」。本週先固定 k=5 把流程跑通，<strong>並把「答案明明在文件裡但沒被撈到」的案例記下來</strong>——那些就是第 4 週要改善的目標。</p>
+</div>
+
+<h3>一個馬上該做的檢查</h3>
+
+<p>寫完檢索之後，先不要接模型，<strong>直接把撈到的段落印出來看</strong>：</p>
+
+<div class="cb" data-lang="python" data-file="probe_retrieval.py">
+<pre><code>QUESTIONS = [
+    "退刷大概多久會入帳",
+    "錯誤碼 51 是什麼意思",
+    "訂單編號有什麼格式限制",
+    "3D Secure 要怎麼啟用",
+    "測試環境的網址是什麼",
+]
+
+for q in QUESTIONS:
+    print(f"\n{'=' * 70}\n{q}\n{'-' * 70}")
+    for hit in search(q, k=5):
+        print(f"[{hit.distance:.4f}] {hit.doc_title} / {hit.heading}")
+        print(f"    {hit.content[:90].replace(chr(10), ' ')}…")</code></pre>
+</div>
+
+<div class="box warn">
+  <p class="bt">這一步不要跳過</p>
+  <p>很多人直接把檢索接上模型，然後發現答案很爛，就開始調 prompt、換模型——<strong>但問題其實在檢索根本沒撈到正確段落</strong>。調 prompt 永遠救不了這個。</p>
+  <p>先用肉眼確認檢索品質，<strong>你對「這個距離數字大概代表多相關」會建立直覺</strong>，後面 debug 會快非常多。</p>
+</div>
+
+<h2 id="s6"><span class="num">6</span>帶引用的回答</h2>
+
+<p>檢索到段落之後，要把它們組進 prompt 讓模型回答。<strong>這一步的設計決定了模型會不會幻覺。</strong></p>
+
+<h3>組 prompt</h3>
+
+<div class="cb" data-lang="python" data-file="answer.py">
+<pre><code>RAG_SYSTEM = """你是金流技術文件的問答助手，服務對象是客服專員。
+
+## 絕對規則
+- 只根據下面提供的「文件片段」回答。不要使用你的既有知識補充。
+- 文件片段裡沒有的資訊，直接說「提供的文件中沒有這項資訊」。
+- 每一個事實陳述後面都要標註來源編號，格式為 [1]、[2]。
+- 可以同時引用多個片段，例如 [1][3]。
+- 如果不同片段互相矛盾，指出矛盾並同時引用兩者，不要自己選一個。
+
+## 輸出格式
+- 繁體中文，先給結論再給細節。
+- 最後不要再列參考資料清單，程式會自己附上。
+"""
+
+
+def build_context(hits: list[Hit]) -> str:
+    blocks = []
+    for i, h in enumerate(hits, 1):
+        header = f"[{i}] 來源：{h.source}／{h.doc_title}"
+        if h.heading:
+            header += f"／{h.heading}"
+        blocks.append(f"{header}\n{h.content}")
+    return "\n\n---\n\n".join(blocks)
+
+
+def answer(question: str, k: int = 5) -> tuple[str, list[Hit]]:
+    hits = search(question, k=k)
+
+    if not hits:
+        return "找不到相關的文件段落。", []
+
+    user_content = (
+        f"## 文件片段\n\n{build_context(hits)}\n\n"
+        f"## 問題\n\n{question}"
+    )
+
+    response = client.messages.create(
+        model="claude-opus-5-5",
+        max_tokens=2048,
+        system=RAG_SYSTEM,
+        output_config={"effort": "low"},
+        messages=[{"role": "user", "content": user_content}],
+    )
+
+    return text_of(response), hits</code></pre>
+</div>
+
+<div class="box tip">
+  <p class="bt">為什麼編號要用 <code>[1]</code> 而不是直接給網址</p>
+  <ul>
+    <li><strong>省 token</strong>：網址每次都重複很浪費，而且很長。</li>
+    <li><strong>好驗證</strong>：編號對應到 <code>hits</code> 的索引，<strong>你的程式可以檢查模型引用的編號是否存在</strong>——引用了 [7] 但你只給了 5 段，那就是幻覺，可以自動抓出來。</li>
+    <li><strong>好呈現</strong>：最後由程式把編號對應回真實的標題和網址，格式統一且一定正確。</li>
+  </ul>
+</div>
+
+<h3>把引用附回去</h3>
+
+<div class="cb" data-lang="python" data-file="answer.py">
+<pre><code>def format_answer(text: str, hits: list[Hit]) -> str:
+    lines = [text, "", "參考來源："]
+    for i, h in enumerate(hits, 1):
+        label = f"{h.source}／{h.doc_title}"
+        if h.heading:
+            label += f"／{h.heading}"
+        lines.append(f"  [{i}] {label}" + (f"\n      {h.url}" if h.url else ""))
+    return "\n".join(lines)</code></pre>
+</div>
+
+<h3>檢查模型有沒有亂引用</h3>
+
+<div class="cb" data-lang="python" data-file="answer.py">
+<pre><code>import re
+
+
+def check_citations(text: str, n_hits: int) -> list[str]:
+    """回傳引用相關的問題清單。空 list 表示沒問題。"""
+    cited = {int(m) for m in re.findall(r"\[(\d+)\]", text)}
+    problems = []
+
+    out_of_range = [c for c in sorted(cited) if c < 1 or c > n_hits]
+    if out_of_range:
+        problems.append(f"引用了不存在的編號：{out_of_range}")
+
+    if not cited and "沒有這項資訊" not in text:
+        problems.append("回答裡完全沒有引用")
+
+    return problems</code></pre>
+</div>
+
+<div class="box tip">
+  <p class="bt">這段程式是第 4、6 週的伏筆</p>
+  <p>這是你的第一個<strong>自動化品質檢查</strong>——不需要人、不需要另一個模型，純程式就能抓出一類幻覺。第 4 週會在這個基礎上加 faithfulness（回答有沒有忠於文件）評估，第 6 週會把它變成 CI 裡的回歸測試。</p>
+  <p><strong>原則：能用程式檢查的，就不要用 LLM 檢查</strong>——便宜、快、而且結果穩定。</p>
+</div>
+
+<div class="box py">
+  <p class="bt"><code>{int(m) for m in ...}</code> 是集合推導式</p>
+  <p>大括號 <code>{}</code> 加推導式產生的是 <strong>set（集合）</strong>，會自動去重。這裡用 set 是因為同一個編號被引用好幾次沒關係，我們只在意「用到了哪些編號」。</p>
+  <p>如果寫成中括號 <code>[]</code> 就是 list（保留重複），寫成 <code>{k: v for ...}</code> 則是 dict。</p>
+</div>
+
+<h2 id="s7"><span class="num">7</span>包成工具，接到第 2 課的機器人</h2>
+
+<p>現在把文件問答變成<strong>第三個工具</strong>。第 2 課的架構已經準備好了，加一個工具只要三步。</p>
+
+<div class="cb" data-lang="python" data-file="tools.py">
+<pre><code># 1. 工具定義
+SEARCH_DOCS = {
+    "name": "search_docs",
+    "description": (
+        "搜尋金流串接技術文件，回傳最相關的文件片段與來源。"
+        "用於回答「怎麼串接」「某個欄位的意義」「錯誤碼代表什麼」"
+        "「某個功能怎麼設定」這類知識性問題。"
+        "不要用這個工具查詢特定訂單的交易資料，那要用 get_transaction。"
+    ),
+    "strict": True,
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "query": {
+                "type": "string",
+                "description": "要搜尋的問題或關鍵詞，用完整句子效果較好。",
+            },
+            "source": {
+                "type": "string",
+                "description": "可選，限定文件來源，例如「綠界」。不確定就不要帶。",
+            },
+        },
+        "required": ["query"],
+        "additionalProperties": False,
+    },
+}
+
+
+# 2. 工具實作
+def search_docs(query: str, source: str | None = None) -> str:
+    hits = search(query, k=5, source=source)
+    if not hits:
+        return json.dumps({"found": False, "query": query}, ensure_ascii=False)
+
+    return json.dumps({
+        "found": True,
+        "chunks": [
+            {
+                "ref": i,
+                "source": h.source,
+                "doc_title": h.doc_title,
+                "heading": h.heading,
+                "url": h.url,
+                "content": h.content,
+                "distance": round(h.distance, 4),
+            }
+            for i, h in enumerate(hits, 1)
+        ],
+    }, ensure_ascii=False)
+
+
+# 3. 註冊
+TOOLS = [GET_TRANSACTION, LOOKUP_ERROR_CODE, SEARCH_DOCS]
+TOOL_IMPLS["search_docs"] = search_docs</code></pre>
+</div>
+
+<div class="box warn">
+  <p class="bt">兩個工具的 description 要互相劃清界線</p>
+  <p>注意 <code>search_docs</code> 的 description 最後一句明講「不要用這個工具查詢特定訂單」。<strong>工具一多，模型選錯工具就成為新的失敗模式</strong>——問「A12345 為什麼失敗」時它可能跑去搜文件。</p>
+  <p>同理，回頭把 <code>get_transaction</code> 的 description 也加一句「這個工具只查特定訂單的資料，不回答一般性的技術問題」。<strong>工具之間的邊界要雙向寫清楚。</strong></p>
+</div>
+
+<div class="box tip">
+  <p class="bt">現在機器人可以做組合題了</p>
+  <p>這是這一課最值得玩的地方。試試問：</p>
+  <div class="cb" data-lang="text"><pre><code>「A99001 這筆為什麼失敗，這種情況文件建議怎麼處理？」</code></pre></div>
+  <p>模型應該會：<strong>查交易</strong>（拿到 error_code 51）→ <strong>查錯誤碼</strong>（餘額不足）→ <strong>搜文件</strong>（這類失敗的處理建議）→ 綜合回答。三個工具串起來，這已經有 agent 的雛形了。</p>
+  <p>把這個案例記下來，第 5 週用 LangGraph 重寫時要拿它做對照。</p>
+</div>
+
+<h2 id="s8"><span class="num">8</span>量測：兩種切塊大小的對照</h2>
+
+<p>這是本週產出的核心。做法很土，但這正是它的價值——<strong>你會親眼看到切塊怎麼影響結果</strong>。</p>
+
+<h3>準備 10 個問題</h3>
+
+<p>問題要有梯度，不要全是簡單的：</p>
+
+<div class="tw">
+<table>
+<thead><tr><th>類型</th><th>例子</th><th>想測什麼</th></tr></thead>
+<tbody>
+<tr><td>直述型</td><td>「測試環境的網址是什麼」</td><td>基本檢索，應該要全中</td></tr>
+<tr><td>同義詞</td><td>「退刷多久入帳」vs 文件寫「退款作業時程」</td><td>向量檢索的強項</td></tr>
+<tr><td>精確字串</td><td>「錯誤碼 51 是什麼」</td><td><strong>向量檢索的弱項</strong>，第 4 週 hybrid search 要解決的</td></tr>
+<tr><td>跨段落</td><td>「串接測試要準備哪些東西」</td><td>答案分散在多個段落</td></tr>
+<tr><td>表格裡</td><td>「MerchantTradeNo 長度上限」</td><td>測表格有沒有被切壞</td></tr>
+<tr><td>文件裡沒有</td><td>「你們支援比特幣付款嗎」</td><td><strong>模型該說「文件中沒有」而不是編</strong></td></tr>
+</tbody>
+</table>
+</div>
+
+<h3>比較腳本</h3>
+
+<div class="cb" data-lang="python" data-file="compare_chunking.py">
+<pre><code>"""同一批文件用兩種切塊設定各建一次索引，跑同樣 10 題比較。"""
+
+CONFIGS = [
+    {"name": "small", "max_size": 600},
+    {"name": "large", "max_size": 1500},
+]
+
+for cfg in CONFIGS:
+    # 用 source 欄位區分兩批資料，就不用開兩個資料庫
+    tag = f"ecpay-{cfg['name']}"
+    rebuild_index(tag, max_size=cfg["max_size"])
+
+    print(f"\n{'#' * 70}\n# 切塊設定：{cfg['name']}（max_size={cfg['max_size']}）\n{'#' * 70}")
+
+    for q in QUESTIONS:
+        hits = search(q, k=5, source=tag)
+        print(f"\n{q}")
+        for i, h in enumerate(hits, 1):
+            print(f"  {i}. [{h.distance:.4f}] {h.heading or '(無標題)'}")
+            print(f"     {h.content[:70].replace(chr(10), ' ')}…")
+        print("  → 正確答案在第幾名？______  （人工填）")</code></pre>
+</div>
+
+<h3>要記錄什麼</h3>
+
+<div class="box tip">
+  <p class="bt">失敗案例筆記的格式</p>
+  <p>對每個檢索失敗的問題，記下這四件事：</p>
+  <ol>
+    <li><strong>問題</strong>是什麼</li>
+    <li><strong>正確答案在文件的哪裡</strong>（哪個章節）</li>
+    <li><strong>實際撈到了什麼</strong>（前 5 名是哪些段落、距離多少）</li>
+    <li><strong>你判斷的原因</strong>——表格被切壞？失去上下文？問題用的詞和文件完全不同？是精確字串匹配問題？</li>
+  </ol>
+  <p>第 4 點最重要。<strong>「為什麼失敗」決定了第 4 週要用哪個手段去修</strong>：失去上下文 → 改切塊策略；精確字串 → hybrid search；用詞不同 → 查詢改寫或 rerank。沒有分類的話，第 4 週就只能亂試。</p>
+</div>
+
+<div class="box warn">
+  <p class="bt">預期你會看到的結果</p>
+  <p>通常<strong>沒有哪一邊全面獲勝</strong>——小塊在精確問題上較好（雜訊少），大塊在需要上下文的問題上較好。這個「沒有最佳解」的體感很重要，它說明了為什麼第 4 週需要用數字來決定，而不是憑感覺挑一個。</p>
+  <p>如果你的結果是某一邊全贏，先懷疑是不是問題太簡單了——<strong>加幾個更刁鑽的問題進去</strong>。</p>
+</div>
+
+<h2 id="s9"><span class="num">9</span>本週實作任務</h2>
+
+<div class="tasks" id="tasks">
+  <div class="tasks-head">
+    <b>第 3 週檢核表</b>
+    <span class="bar"><i id="taskBar"></i></span>
+    <span class="pc" id="taskPc">0 / 10</span>
+  </div>
+  <div class="task"><input type="checkbox" id="t1"><label for="t1">用 Docker 起 Postgres + pgvector，<code>docker compose ps</code> 顯示 healthy<span class="hint">§1 · 檔名用 compose.yaml，port 對應到 5433 避開本機 Postgres</span></label></div>
+  <div class="task"><input type="checkbox" id="t2"><label for="t2">建好 chunks 資料表，Python 能連上且 <code>register_vector</code> 有呼叫<span class="hint">§1 · 忘記 register_vector 的錯誤訊息完全看不出原因</span></label></div>
+  <div class="task"><input type="checkbox" id="t3"><label for="t3">收集 20–30 頁<strong>公開</strong>金流串接文件<span class="hint">§3 · 只用公開資料，repo 要能公開給招募方看</span></label></div>
+  <div class="task"><input type="checkbox" id="t4"><label for="t4">選定 embedding 供應商並能成功取得向量<span class="hint">§2 · Anthropic 沒有 embedding 模型，這一步要另一個 key</span></label></div>
+  <div class="task"><input type="checkbox" id="t5"><label for="t5">實作切塊，<strong>把標題拼回內容再做 embedding</strong><span class="hint">§3 · 這是對抗「失去上下文」最便宜的手段</span></label></div>
+  <div class="task"><input type="checkbox" id="t6"><label for="t6">資料載完<strong>之後</strong>建 HNSW 索引，運算子與 operator class 對上<span class="hint">§4 · <code>&lt;=&gt;</code> 配 <code>vector_cosine_ops</code></span></label></div>
+  <div class="task"><input type="checkbox" id="t7"><label for="t7">先用肉眼檢查檢索品質，再接模型<span class="hint">§5 · 跳過這步會把檢索問題誤判成 prompt 問題</span></label></div>
+  <div class="task"><input type="checkbox" id="t8"><label for="t8">實作帶引用的回答，並用程式檢查引用編號是否存在<span class="hint">§6 · 能用程式檢查的就不要用 LLM 檢查</span></label></div>
+  <div class="task"><input type="checkbox" id="t9"><label for="t9">包成 <code>search_docs</code> 工具接到第 2 課的機器人，三個工具的邊界互相寫清楚<span class="hint">§7 · 試那題需要串三個工具的組合題</span></label></div>
+  <div class="task"><input type="checkbox" id="t10"><label for="t10">兩種切塊大小各跑 10 個問題，寫出<strong>失敗案例筆記（含失敗原因分類）</strong><span class="hint">§8 · 這是第 4 週測試集的來源，比程式碼更重要</span></label></div>
+</div>
+
+<h3>加分項</h3>
+
+<div class="tasks" id="tasks2">
+  <div class="tasks-head">
+    <b>加分</b>
+    <span class="bar"><i id="taskBar2"></i></span>
+    <span class="pc" id="taskPc2">0 / 4</span>
+  </div>
+  <div class="task"><input type="checkbox" id="b1"><label for="b1">同時接本機 embedding（Ollama）與雲端的，比較品質差異<span class="hint">§2 · 「資料不出境值不值得」的實證，很好的面試素材</span></label></div>
+  <div class="task"><input type="checkbox" id="b2"><label for="b2">試 <code>voyage-finance-2</code> 或 <code>voyage-context-4</code>，和通用模型比<span class="hint">§2 §3 · 領域特化與上下文化切塊的效果</span></label></div>
+  <div class="task"><input type="checkbox" id="b3"><label for="b3">在檢索加距離門檻，太遠的段落不要塞進 prompt<span class="hint">§5 · 觀察門檻設多少會開始漏掉正確答案</span></label></div>
+  <div class="task"><input type="checkbox" id="b4"><label for="b4">把表格獨立處理：整張表當一塊，或每列帶表頭<span class="hint">§3 · 金流文件表格很多，這通常改善明顯</span></label></div>
+</div>
+
+<div class="deliver">
+  <p class="bt">驗收標準</p>
+  <ol>
+    <li>問一個<strong>文件裡沒有</strong>的問題時，系統會說「文件中沒有這項資訊」而不是編一個答案——我測過嗎？</li>
+    <li>我的每個回答都<strong>附得出可點擊的來源</strong>嗎？</li>
+    <li>我能說出<strong>哪一類問題檢索會失敗、為什麼</strong>嗎？（不是「有時候不準」，而是具體的分類）</li>
+    <li>那題需要串三個工具的組合題，<strong>模型真的全部用對了嗎</strong>？</li>
+  </ol>
+  <p class="small" style="margin-top:.7rem">週日 commit 前寫 3 行學習筆記。</p>
+</div>
+
+<h2 id="s10"><span class="num">10</span>自我檢核</h2>
+
+<div class="quiz" id="quiz">
+  <div class="q">
+    <div class="q-q"><span class="qn">1</span><span>為什麼不直接把整份文件塞進 context？現在模型不是有 1M context window 嗎？</span></div>
+    <button class="q-btn">看答案</button>
+    <div class="q-a"><div class="ans">
+      <p>技術上塞得下，但四個問題：<strong>成本</strong>（每次對話都付一次全文的錢）、<strong>延遲</strong>（輸入越長首 token 越慢）、<strong>品質反而下降</strong>（大量無關內容稀釋注意力）、<strong>不可擴充</strong>（文件庫一成長就撐不住）。</p>
+      <p>Context window 變大改變的是「單次能處理多少」，不是「該不該每次都塞全部」。<strong>RAG 解決的是後者。</strong></p>
+    </div></div>
+  </div>
+  <div class="q">
+    <div class="q-q"><span class="qn">2</span><span>你的 RAG 回答品質很差。要先懷疑檢索還是先懷疑模型？怎麼判斷？</span></div>
+    <button class="q-btn">看答案</button>
+    <div class="q-a"><div class="ans">
+      <p><strong>先懷疑檢索</strong>，而且判斷方法很簡單：<strong>把撈到的段落直接印出來看</strong>，正確答案在不在裡面。</p>
+      <p>如果不在，那是檢索問題，調 prompt 或換模型都救不了——<strong>模型看不到答案就不可能答對</strong>。如果在裡面但模型沒用好，才是 prompt 或模型的問題。</p>
+      <p>這就是為什麼第 4 週整整一週都在量檢索指標（recall@k、MRR），而不是在調模型。</p>
+    </div></div>
+  </div>
+  <div class="q">
+    <div class="q-q"><span class="qn">3</span><span>一個切出來的塊寫著「此欄位為必填，長度上限 20 字元」。為什麼這會造成檢索失敗？怎麼修？</span></div>
+    <button class="q-btn">看答案</button>
+    <div class="q-a"><div class="ans">
+      <p>「此欄位」指的是什麼，在原文裡靠上方的標題交代，<strong>切塊之後那個資訊就消失了</strong>。所以這一塊的向量裡根本沒有「訂單編號」這個概念，使用者問「訂單編號有什麼限制」時撈不到它。</p>
+      <p>最便宜的解法：<strong>做 embedding 時把文件標題和章節標題拼回內容前面</strong>。注意是「用來做 embedding 的文字」拼，存進資料庫給模型看的還是原始內容加上獨立的 heading 欄位。</p>
+      <p>進階解法是用 contextualized chunk embedding 模型（例如 <code>voyage-context-4</code>），由模型自己處理上下文。</p>
+    </div></div>
+  </div>
+  <div class="q">
+    <div class="q-q"><span class="qn">4</span><span>你把 embedding 模型從 A 換成 B，兩者都是 1024 維。資料庫要做什麼？</span></div>
+    <button class="q-btn">看答案</button>
+    <div class="q-a"><div class="ans">
+      <p><strong>整個資料庫要重新 embedding。</strong>維度一樣只是巧合，不同模型產生的向量空間完全不同，彼此的向量沒有可比性。</p>
+      <p>如果你只換了查詢端沒換索引端（或反過來），<strong>程式會照跑、不會報錯，但檢索結果會變成隨機的</strong>。這是 RAG 專案「怎麼突然全部查不到了」最常見的原因。</p>
+      <p>防範方式：把模型名稱和維度寫成綁在一起的常數，並且存進資料表或至少記在 README。</p>
+    </div></div>
+  </div>
+  <div class="q">
+    <div class="q-q"><span class="qn">5</span><span><code>input_type</code> 不設會怎樣？</span></div>
+    <button class="q-btn">看答案</button>
+    <div class="q-a"><div class="ans">
+      <p>程式照跑，不報錯，<strong>但檢索品質下降</strong>。</p>
+      <p>Voyage 會依 <code>input_type</code> 在文字前加上不同的提示句（query 版和 document 版不同），讓問句和文件段落被對應到更適合互相比對的位置。省略它等於放棄這個優化。</p>
+      <p>這類「不會報錯但默默變差」的坑是 RAG 最難 debug 的部分——<strong>所以才需要第 4 週的量化評估</strong>，靠感覺是察覺不到的。</p>
+    </div></div>
+  </div>
+  <div class="q">
+    <div class="q-q"><span class="qn">6</span><span>為什麼向量索引要在資料載完之後才建？建錯 operator class 會怎樣？</span></div>
+    <button class="q-btn">看答案</button>
+    <div class="q-a"><div class="ans">
+      <p><strong>先載資料再建索引比較快</strong>——先建索引的話，每一筆插入都要更新索引結構。pgvector 官方文件明確建議這個順序。</p>
+      <p>operator class 和查詢運算子不一致（例如索引建 <code>vector_cosine_ops</code> 但查詢用 <code>&lt;-&gt;</code>）時，<strong>查詢仍然會回傳正確結果，但走不到索引，變成全表掃描</strong>。資料少時完全看不出來，資料一多就突然很慢——而且因為結果是對的，很難聯想到是索引問題。</p>
+    </div></div>
+  </div>
+</div>
+
+<h2 id="s11"><span class="num">11</span>常見錯誤排查</h2>
+
+<div class="tw">
+<table>
+<thead><tr><th>症狀</th><th>原因與解法</th></tr></thead>
+<tbody>
+<tr><td>連不上資料庫 / <code>connection refused</code></td><td>容器沒起來或還沒 healthy。<code>docker compose ps</code> 看狀態，<code>docker compose logs db</code> 看錯誤。</td></tr>
+<tr><td>連得上但資料表不存在</td><td>很可能連到<strong>本機原本就有的 Postgres</strong>（5432）而不是容器。確認 DSN 的 port 是 5433。</td></tr>
+<tr><td><code>type "vector" does not exist</code></td><td>沒跑 <code>CREATE EXTENSION vector;</code>，或跑在別的資料庫上。</td></tr>
+<tr><td>插入向量時型別錯誤</td><td>忘記 <code>register_vector(conn)</code>。每個新連線都要呼叫。見 <a href="#s1-psycopg">§1</a>。</td></tr>
+<tr><td>查詢回來的 embedding 是一長串字串</td><td>同上，<code>register_vector</code> 沒呼叫。</td></tr>
+<tr><td><code>expected 1024 dimensions, not 1536</code></td><td>embedding 模型的維度和 <code>vector(N)</code> 不一致。改資料表或改模型維度參數。</td></tr>
+<tr><td>檢索結果看起來像隨機的</td><td>最可能是<strong>索引和查詢用了不同的 embedding 模型</strong>，或 <code>input_type</code> 用反了。</td></tr>
+<tr><td>檢索品質普通但說不上哪裡錯</td><td>檢查 <code>input_type</code> 有沒有設。這個不會報錯但會明顯影響品質。</td></tr>
+<tr><td>問錯誤碼的問題都查不到</td><td>精確字串是向量檢索的弱項，加上表格可能被切壞。記進失敗案例筆記，第 4 週用 hybrid search 解。</td></tr>
+<tr><td>問參數欄位的問題都查不到</td><td>典型的「失去上下文」。把標題拼回內容再 embedding。見 <a href="#s3-lost">§3</a>。</td></tr>
+<tr><td>模型編造文件裡沒有的內容</td><td>system prompt 的「絕對規則」不夠強硬，或 k 太大塞了太多無關段落。先檢查撈到的段落品質。</td></tr>
+<tr><td>模型引用了不存在的編號</td><td>用 <code>check_citations</code> 抓出來。通常是 k 和實際回傳數量不一致，或 prompt 裡的編號格式不夠明確。</td></tr>
+<tr><td>資料量大了之後查詢變很慢</td><td>索引的 operator class 和查詢運算子不一致，走不到索引。見 <a href="#s4-index">§4</a>。</td></tr>
+<tr><td><code>docker compose down -v</code> 之後資料沒了</td><td><code>-v</code> 會刪 volume。要重新 ingest（會再花一次 embedding 的錢）。平常用不加 <code>-v</code> 的 <code>down</code>。</td></tr>
+</tbody>
+</table>
+</div>
+
+<h2 id="s12"><span class="num">12</span>延伸閱讀</h2>
+
+<div class="tw">
+<table>
+<thead><tr><th>資源</th><th>讀什麼</th></tr></thead>
+<tbody>
+<tr><td><a href="https://github.com/pgvector/pgvector">pgvector</a></td><td>README 就夠了。重點看距離運算子、HNSW 索引參數、以及和全文檢索搭配做 hybrid search（第 4 週要用）。</td></tr>
+<tr><td><a href="https://platform.claude.com/docs/en/build-with-claude/embeddings">Anthropic embeddings 指南</a></td><td>模型選擇、<code>input_type</code> 的說明、量化與 Matryoshka 截斷。</td></tr>
+<tr><td><a href="https://docs.voyageai.com/">Voyage AI 文件</a></td><td>定價、rate limit、各模型的適用場景。<strong>定價請自己查，不要用教材裡的數字</strong>。</td></tr>
+<tr><td><a href="https://hamel.dev/blog/posts/evals-faq/">AI Evals FAQ</a></td><td>第 4 週的主要參考，但<strong>這週就可以先讀「錯誤分析怎麼做」那一段</strong>——你的失敗案例筆記就是在做錯誤分析。</td></tr>
+</tbody>
+</table>
+</div>
+
+<div class="box tip">
+  <p class="bt">下一課預告</p>
+  <p>第 4 課是 <strong>RAG 進階與第一批 Evals</strong>：建 30 題黃金測試集、量 recall@5、比較純向量 vs hybrid search vs 加 rerank，並用 Ragas 或自寫的 LLM-as-judge 評 faithfulness。最後把評估寫成一個指令就能重跑的腳本。</p>
+  <p><strong>這週的失敗案例筆記就是下週測試集的原料</strong>，所以請認真記，特別是「失敗原因」那一欄。</p>
+</div>
+
+<div class="foot">
+  <p>AI 應用工程師 4–8 週學習計畫 · 第 3 週第 3 課<br>
+  embedding 供應商與模型對照 Anthropic 官方 embeddings 指南；pgvector 的運算子、索引語法與建議對照 pgvector 官方 README。</p>
+  <p><a href="02-tool-calling-mcp.html">← 回第 2 課</a> · <a href="index.html">課程索引</a> · <a href="04-rag-evals.html">第 4 課：RAG 進階與 Evals →</a></p>
+</div>
+
+</div>
+</main>
+</div>
+<!--SHARED-JS:START-->
+<script>
+/* 課程共用互動 —— 語法高亮、語法解剖、目錄、任務清單、測驗、計算器 */
+(function(){
+"use strict";
+
+/* ---------- 工具 ---------- */
+var esc = function(s){ return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); };
+function store(k, v){
+  try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); }
+  catch(e){ return null; }
+}
+
+/* ---------- 深淺色 ---------- */
+var tBtn = document.getElementById("themeBtn");
+var saved = store("lesson-theme") || store("l1-theme");   /* l1-theme 是舊的鍵名，沿用既有設定 */
+if (saved === "dark" || saved === "light") document.documentElement.setAttribute("data-theme", saved);
+if (tBtn) tBtn.addEventListener("click", function(){
+  var cur = document.documentElement.getAttribute("data-theme");
+  if (!cur) cur = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  var next = cur === "dark" ? "light" : "dark";
+  document.documentElement.setAttribute("data-theme", next);
+  store("lesson-theme", next);
+});
+
+/* ---------- 行動版選單 ---------- */
+var sb = document.getElementById("sidebar"), scrim = document.getElementById("scrim");
+var menuBtn = document.getElementById("menuBtn");
+function closeSb(){ if (sb) sb.classList.remove("open"); if (scrim) scrim.classList.remove("on"); }
+if (menuBtn && sb) menuBtn.addEventListener("click", function(){
+  sb.classList.toggle("open"); if (scrim) scrim.classList.toggle("on");
+});
+if (scrim) scrim.addEventListener("click", closeSb);
+
+/* ---------- 語法高亮 ---------- */
+var PY = [
+  ["com", /#[^\n]*/y],
+  ["str", /(?:[fFrRbB]{0,2})(?:"""[\s\S]*?"""|'''[\s\S]*?'''|"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*')/y],
+  ["dec", /@[A-Za-z_][\w.]*/y],
+  ["kw",  /\b(?:import|from|as|def|class|return|if|elif|else|for|while|in|not|and|or|is|None|True|False|with|try|except|finally|raise|async|await|yield|lambda|pass|break|continue|global|nonlocal|assert|del)\b/y],
+  ["bi",  /\b(?:print|len|range|str|int|float|bool|list|dict|set|tuple|type|open|sum|min|max|next|input|enumerate|zip|sorted|isinstance|Exception|RuntimeError|ValueError|AttributeError|KeyError)\b/y],
+  ["num", /\b\d[\d_]*\.?\d*(?:[eE][-+]?\d+)?\b/y],
+  ["fn",  /\b[A-Za-z_]\w*(?=\s*\()/y],
+  ["op",  /[-+*/%=<>!&|^~:,.()[\]{}]/y]
+];
+var BASH = [
+  ["com", /#[^\n]*/y],
+  ["str", /"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'/y],
+  ["kw",  /\b(?:uv|git|brew|curl|cd|printf|echo|ollama|export|python|pytest|sh)\b/y],
+  ["dec", /(?:^|\s)(--?[A-Za-z][\w-]*)/y],
+  ["num", /\b\d[\d.]*\b/y],
+  ["op",  /[|&>;<]/y]
+];
+var SQL = [
+  ["com", /--[^\n]*/y],
+  ["str", /'(?:''|[^'])*'/y],
+  ["kw",  /\b(?:CREATE|TABLE|INDEX|EXTENSION|IF|NOT|EXISTS|SELECT|FROM|WHERE|ORDER|BY|LIMIT|INSERT|INTO|VALUES|USING|ON|AS|AND|OR|DROP|DEFAULT|PRIMARY|KEY|NULL|WITH|SET|UPDATE|DELETE|JOIN|GROUP|HAVING)\b/iy],
+  ["bi",  /\b(?:vector|bigserial|text|int|timestamptz|real|boolean|now|hnsw|ivfflat|vector_cosine_ops|vector_l2_ops|vector_ip_ops|vector_l1_ops)\b/iy],
+  ["num", /\b\d+\b/y],
+  ["op",  /<=>|<->|<#>|<\+>|[(),;.*=]/y]
+];
+var YAML = [
+  ["com", /#[^\n]*/y],
+  ["str", /"(?:\\.|[^"\\])*"|'(?:[^'])*'/y],
+  ["fn",  /^[ \t]*[A-Za-z_][\w.-]*(?=:)/my],
+  ["op",  /^[ \t]*-(?=\s)/my],
+  ["num", /\b\d+\b/y],
+  ["kw",  /\b(?:true|false|null)\b/y]
+];
+var JSONR = [
+  ["str", /"(?:\\.|[^"\\])*"(?=\s*:)/y],
+  ["fn",  /"(?:\\.|[^"\\])*"/y],
+  ["kw",  /\b(?:true|false|null)\b/y],
+  ["num", /-?\b\d[\d.]*(?:[eE][-+]?\d+)?\b/y],
+  ["op",  /[{}[\],:]/y]
+];
+function pickRules(lang){
+  return lang === "python" ? PY
+       : lang === "bash"   ? BASH
+       : lang === "json"   ? JSONR
+       : lang === "sql"    ? SQL
+       : lang === "yaml"   ? YAML
+       : null;
+}
+function hl(code, rules){
+  var out = "", i = 0, n = code.length;
+  while (i < n){
+    var hit = false;
+    for (var r = 0; r < rules.length; r++){
+      var cls = rules[r][0], re = rules[r][1];
+      re.lastIndex = i;
+      var m = re.exec(code);
+      if (m && m.index === i && m[0].length){
+        out += '<span class="t-' + cls + '">' + esc(m[0]) + "</span>";
+        i += m[0].length; hit = true; break;
+      }
+    }
+    if (!hit){ out += esc(code[i]); i++; }
+  }
+  return out;
+}
+
+/* ---------- 程式碼區塊：高亮 + 工具列 + 複製 ---------- */
+Array.prototype.forEach.call(document.querySelectorAll(".cb"), function(cb){
+  var pre = cb.querySelector("pre"), codeEl = cb.querySelector("code");
+  if (!pre || !codeEl) return;
+  var lang = cb.getAttribute("data-lang") || "text";
+  var raw = codeEl.textContent;
+
+  /* anno 區塊的高亮交給下面的 anno 迴圈處理 —— 它需要在高亮前插入標記 */
+  var rules = pickRules(lang);
+  if (rules && !cb.hasAttribute("data-anno")) codeEl.innerHTML = hl(raw, rules);
+
+  var bar = document.createElement("div");
+  bar.className = "cb-bar";
+  var file = cb.getAttribute("data-file");
+  bar.innerHTML = '<span class="cb-lang">' + esc(lang) + "</span>" +
+                  (file ? '<span class="cb-file">' + esc(file) + "</span>" : "") +
+                  '<span class="sp"></span>';
+  var btn = document.createElement("button");
+  btn.className = "cb-copy"; btn.type = "button"; btn.textContent = "複製";
+  btn.addEventListener("click", function(){
+    var done = function(){
+      btn.textContent = "已複製"; btn.classList.add("done");
+      setTimeout(function(){ btn.textContent = "複製"; btn.classList.remove("done"); }, 1600);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(raw).then(done, function(){ btn.textContent = "複製失敗"; });
+    } else {
+      var ta = document.createElement("textarea");
+      ta.value = raw; document.body.appendChild(ta); ta.select();
+      try { document.execCommand("copy"); done(); } catch(e){ btn.textContent = "複製失敗"; }
+      document.body.removeChild(ta);
+    }
+  });
+  bar.appendChild(btn);
+  cb.insertBefore(bar, pre);
+});
+
+/* ---------- 語法解剖：標記 ↔ 說明連動 ---------- */
+/* 每個 .note 用 data-line 指定它對應程式碼的第幾行（1-based）。
+   做法：先在原始文字的行尾插入哨符 \u0001，高亮之後再把哨符換成標記 —— 
+   這樣標記一定落在 span 邊界外，不會破壞高亮產生的 HTML 結構。 */
+Array.prototype.forEach.call(document.querySelectorAll(".anno"), function(anno){
+  var cb = anno.querySelector(".cb");
+  var codeEl = anno.querySelector("pre code");
+  var notes = anno.querySelectorAll(".note");
+  if (!cb || !codeEl || !notes.length) return;
+
+  var lang = cb.getAttribute("data-lang") || "text";
+  var rules = pickRules(lang);
+
+  var pairs = [];
+  Array.prototype.forEach.call(notes, function(nd, i){
+    var ln = parseInt(nd.getAttribute("data-line"), 10);
+    if (ln > 0) pairs.push({ line: ln, note: i + 1 });
+  });
+  if (!pairs.length) return;
+  pairs.sort(function(a, b){ return a.line - b.line; });   /* 哨符要依文件順序取用 */
+
+  var lines = codeEl.textContent.split("\n");
+  pairs.forEach(function(pr){
+    if (pr.line >= 1 && pr.line <= lines.length) lines[pr.line - 1] += "\u0001";
+  });
+
+  var marked = lines.join("\n");
+  var out = rules ? hl(marked, rules) : esc(marked);
+  var k = 0;
+  out = out.replace(/\u0001/g, function(){
+    var pr = pairs[k++];
+    return pr ? '<span class="pin" data-pin="' + pr.note + '" data-n="' + pr.note + '"></span>' : "";
+  });
+  codeEl.innerHTML = out;
+
+  function activate(n){
+    Array.prototype.forEach.call(anno.querySelectorAll(".pin"), function(pin){
+      pin.classList.toggle("on", pin.getAttribute("data-pin") === String(n));
+    });
+    Array.prototype.forEach.call(notes, function(nd, idx){
+      nd.classList.toggle("on", idx + 1 === n);
+    });
+  }
+  Array.prototype.forEach.call(anno.querySelectorAll(".pin"), function(pin){
+    pin.addEventListener("click", function(){ activate(Number(pin.getAttribute("data-pin"))); });
+  });
+  Array.prototype.forEach.call(notes, function(nd, idx){
+    nd.style.cursor = "pointer";
+    nd.addEventListener("click", function(){ activate(idx + 1); });
+  });
+});
+
+/* ---------- 目錄 + scroll-spy ---------- */
+var toc = document.getElementById("toc");
+var heads = toc ? document.querySelectorAll("h2[id], h3[id]") : [];
+var links = [];
+
+function goTo(el){
+  var top = el.getBoundingClientRect().top + window.scrollY - 16;
+  /* 近距離用平滑捲動（有助於定位），遠距離直接跳 ——
+     這份文件很長，跨章節平滑捲動要一兩秒，反而難用。 */
+  var smooth = Math.abs(top - window.scrollY) < 2000;
+  try { window.scrollTo({ top: top, behavior: smooth ? "smooth" : "auto" }); }
+  catch (e) { window.scrollTo(0, top); }          /* 舊瀏覽器沒有 options 形式 */
+  try { history.replaceState(null, "", "#" + el.id); } catch (e) {}  /* data: URL 會擋，忽略 */
+}
+Array.prototype.forEach.call(heads, function(h){
+  var li = document.createElement("li");
+  if (h.tagName === "H3") li.className = "sub";
+  var a = document.createElement("a");
+  a.href = "#" + h.id;
+  var numEl = h.querySelector(".num");
+  a.textContent = numEl ? numEl.textContent + " " + h.textContent.slice(numEl.textContent.length) : h.textContent;
+  /* 不依賴瀏覽器的錨點跳轉：從 file:// 或 data: 開啟時它會被當成換頁而失效，
+     這裡自己捲動，各種開啟方式都一致。 */
+  a.addEventListener("click", function(ev){
+    ev.preventDefault();
+    closeSb();
+    goTo(h);
+  });
+  li.appendChild(a); toc.appendChild(li);
+  links.push({ a: a, el: h });
+});
+var spy = function(){
+  var y = window.scrollY + 90, cur = links[0];
+  for (var i = 0; i < links.length; i++){ if (links[i].el.offsetTop <= y) cur = links[i]; }
+  links.forEach(function(l){ l.a.classList.toggle("active", l === cur); });
+};
+var ticking = false;
+window.addEventListener("scroll", function(){
+  if (ticking) return; ticking = true;
+  requestAnimationFrame(function(){ spy(); ticking = false; });
+}, { passive: true });
+spy();
+
+/* ---------- 任務清單 ---------- */
+function wireTasks(wrapId, barId, pcId, key, legacyKey){
+  var wrap = document.getElementById(wrapId);
+  if (!wrap) return;
+  var boxes = wrap.querySelectorAll('input[type="checkbox"]');
+  var bar = document.getElementById(barId), pc = document.getElementById(pcId);
+  var savedState = {};
+  /* 鍵名改過，舊鍵的進度還讀得回來 */
+  var rawState = store(key) || (legacyKey ? store(legacyKey) : null);
+  try { savedState = JSON.parse(rawState || "{}") || {}; } catch(e){ savedState = {}; }
+
+  function render(){
+    var done = 0;
+    Array.prototype.forEach.call(boxes, function(b){
+      b.closest(".task").classList.toggle("done", b.checked);
+      if (b.checked) done++;
+    });
+    bar.style.width = (boxes.length ? (done / boxes.length * 100) : 0) + "%";
+    pc.textContent = done + " / " + boxes.length;
+  }
+  Array.prototype.forEach.call(boxes, function(b){
+    if (savedState[b.id]) b.checked = true;
+    b.addEventListener("change", function(){
+      savedState[b.id] = b.checked;
+      store(key, JSON.stringify(savedState));
+      render();
+    });
+  });
+  render();
+}
+/* 內文裡指向章節的連結（例如「見 §4」）同樣自己接管 */
+Array.prototype.forEach.call(document.querySelectorAll('.main a[href^="#"]'), function(a){
+  a.addEventListener("click", function(ev){
+    var target = document.getElementById(a.getAttribute("href").slice(1));
+    if (!target) return;
+    ev.preventDefault();
+    goTo(target);
+  });
+});
+
+/* 鍵名帶上檔名，各課的進度才不會互相覆蓋 */
+var PAGE = (location.pathname.split("/").pop() || "lesson").replace(/\.html$/, "");
+var LEGACY = PAGE === "01-llm-api-basics";    /* 第 1 課原本用 l1-* 當鍵名 */
+wireTasks("tasks", "taskBar", "taskPc", PAGE + "-tasks", LEGACY ? "l1-tasks" : null);
+wireTasks("tasks2", "taskBar2", "taskPc2", PAGE + "-bonus", LEGACY ? "l1-bonus" : null);
+
+/* ---------- 測驗 ---------- */
+Array.prototype.forEach.call(document.querySelectorAll("#quiz .q"), function(q){
+  var btn = q.querySelector(".q-btn"), ans = q.querySelector(".q-a");
+  btn.addEventListener("click", function(){
+    var on = ans.classList.toggle("on");
+    btn.textContent = on ? "收起答案" : "看答案";
+  });
+});
+
+/* ---------- 成本計算器 ---------- */
+(function(){
+  var ids = ["c-model","c-in","c-out","c-n"];
+  var el = {}; ids.forEach(function(i){ el[i] = document.getElementById(i); });
+  if (!el["c-model"]) return;
+  var out = {};
+  ["o-it","o-ip","o-ic","o-ot","o-op","o-oc","o-total","o-each","o-n"].forEach(function(i){
+    out[i] = document.getElementById(i);
+  });
+  var fmt = function(n, d){ return n.toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d }); };
+
+  function calc(){
+    var parts = el["c-model"].value.split(",");
+    var pin = parseFloat(parts[0]), pout = parseFloat(parts[1]);
+    var ti = Math.max(0, parseFloat(el["c-in"].value) || 0);
+    var to = Math.max(0, parseFloat(el["c-out"].value) || 0);
+    var n  = Math.max(1, parseFloat(el["c-n"].value) || 1);
+
+    var inTok = ti * n, outTok = to * n;
+    var inCost = inTok / 1e6 * pin, outCost = outTok / 1e6 * pout;
+    var total = inCost + outCost;
+
+    out["o-it"].textContent = fmt(inTok, 0);
+    out["o-ot"].textContent = fmt(outTok, 0);
+    out["o-ip"].textContent = "$" + fmt(pin, 2);
+    out["o-op"].textContent = "$" + fmt(pout, 2);
+    out["o-ic"].textContent = "$" + fmt(inCost, 4);
+    out["o-oc"].textContent = "$" + fmt(outCost, 4);
+    out["o-n"].textContent  = fmt(n, 0);
+    out["o-total"].textContent = "$" + fmt(total, 2);
+    out["o-each"].textContent  = "$" + fmt(total / n, 6);
+  }
+  ids.forEach(function(i){
+    el[i].addEventListener("input", calc);
+    el[i].addEventListener("change", calc);
+  });
+  calc();
+})();
+
+})();
+
+</script>
+<!--SHARED-JS:END-->
+</body>
+</html>
