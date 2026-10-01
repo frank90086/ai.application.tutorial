@@ -378,3 +378,16 @@ docker-compose.yml
 vol/
 
 .vscode
+
+### Python / uv
+.venv/
+venv/
+.python-version
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+
+### Secrets / local config
+.env
+.env.*
+!.env.example
