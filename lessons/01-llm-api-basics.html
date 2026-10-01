@@ -1321,38 +1321,49 @@ def analyze_with_retry(complaint: str, max_attempts: int = 3) -> ComplaintAnalys
     messages: list[dict] = [{"role": "user", "content": complaint}]
 
     for attempt in range(1, max_attempts + 1):
-        response = client.messages.parse(
-            model="claude-opus-5-5",
-            max_tokens=2048,
-            system=SYSTEM,
-            output_config={"effort": "low"},
-            messages=messages,
-            output_format=ComplaintAnalysis,
-        )
-
-        # 先檢查是不是被截斷 —— 這會讓 JSON 不完整
-        if response.stop_reason == "max_tokens":
-            raise RuntimeError(
-                f"輸出被 max_tokens 截斷（第 {attempt} 次）。調高 max_tokens。"
+        response = None
+        try:
+            response = client.messages.parse(
+                model="claude-opus-5-5",
+                max_tokens=2048,
+                system=SYSTEM,
+                output_config={"effort": "low"},
+                messages=messages,
+                output_format=ComplaintAnalysis,
             )
 
-        try:
+            # 先檢查是不是被截斷 —— 這會讓 JSON 不完整
+            if response.stop_reason == "max_tokens":
+                raise RuntimeError(
+                    f"輸出被 max_tokens 截斷（第 {attempt} 次）。調高 max_tokens。"
+                )
+
             return response.parsed_output
+
         except ValidationError as e:
             if attempt == max_attempts:
                 raise
 
-            # 把模型的錯誤回答和驗證錯誤一起送回去，讓它自己修
-            messages.append({"role": "assistant", "content": response.content})
+            # 把模型的錯誤回答和驗證錯誤一起送回去，讓它自己修。
+            # response 可能是 None（驗證在 parse() 內就失敗），那就只送錯誤訊息。
+            if response is not None:
+                messages.append({"role": "assistant", "content": response.content})
             messages.append({
                 "role": "user",
                 "content": (
-                    f"你的回答沒有通過驗證：\n{e}\n\n"
+                    f"你上一次的回答沒有通過驗證：\n{e}\n\n"
                     "請依照 schema 重新輸出，只修正出錯的欄位。"
                 ),
             })
 
     raise RuntimeError("不會走到這裡")</code></pre>
+</div>
+
+<div class="box warn">
+  <p class="bt"><code>try</code> 要包住整個 <code>parse()</code>，不能只包取值那一行</p>
+  <p>直覺的寫法是 <code>response = client.messages.parse(...)</code> 放在 try 外面、只把 <code>return response.parsed_output</code> 包起來。<strong>但驗證有可能是在 <code>parse()</code> 內部就執行並拋出的</strong>——那樣例外會從 try 外面飛出去，你的重試邏輯<u>一次都不會觸發</u>，而且表面上看起來只是「這個 API 有時候會丟 ValidationError」。</p>
+  <p>把整段包進 try 的寫法<strong>兩種情況都成立</strong>，所以不需要先確認 SDK 是哪一種行為。這是處理不確定的函式庫行為時的通用做法：<strong>讓程式對兩種可能都正確，而不是賭一種。</strong></p>
+  <p>代價是 <code>response</code> 可能是 <code>None</code>（在 parse 內就失敗時），所以 append 前要先判斷。</p>
 </div>
 
 <div class="box tip">

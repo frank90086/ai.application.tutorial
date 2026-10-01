@@ -882,6 +882,7 @@ for turn in range(max_turns):
 <pre><code>import json
 import re
 import sqlite3
+from contextlib import closing
 from pathlib import Path
 
 DB_PATH = Path(__file__).parent / "transactions.db"
@@ -903,7 +904,7 @@ def get_transaction(order_id: str) -> str:
             ensure_ascii=False,
         )
 
-    with _connect() as conn:
+    with closing(_connect()) as conn:
         row = conn.execute(
             "SELECT * FROM transactions WHERE order_id = ?", (order_id,)
         ).fetchone()
@@ -916,7 +917,7 @@ def get_transaction(order_id: str) -> str:
 
 def lookup_error_code(code: str) -> str:
     """查錯誤碼的意義。回傳 JSON 字串。"""
-    with _connect() as conn:
+    with closing(_connect()) as conn:
         row = conn.execute(
             "SELECT * FROM error_codes WHERE code = ?", (code,)
         ).fetchone()
@@ -934,6 +935,22 @@ def lookup_error_code(code: str) -> str:
     <li><strong><code>{"found": True, **dict(row)}</code></strong>：<code>**</code> 是「字典展開」——把 <code>dict(row)</code> 的所有鍵值攤進新的 dict 裡。等同於先建 <code>{"found": True}</code> 再 <code>update()</code>。</li>
     <li><strong>函式名稱前的底線 <code>_connect</code></strong>：Python 的慣例，表示「這是模組內部用的，外面不要呼叫」。只是約定，不是強制。</li>
   </ul>
+</div>
+
+<div class="box danger">
+  <p class="bt"><code>with closing(...)</code> 不能省——sqlite3 的 <code>with conn</code> 不會關連線</p>
+  <p>這是個很容易中招的陷阱：<strong><code>with sqlite3_conn:</code> 只會提交交易，<u>不會關閉連線</u></strong>。</p>
+  <div class="cb" data-lang="python"><pre><code># ❌ 連線never被關閉 —— 每次呼叫工具就洩漏一個
+with _connect() as conn:
+    row = conn.execute(...).fetchone()
+
+# ✅ closing() 保證離開區塊時呼叫 conn.close()
+from contextlib import closing
+
+with closing(_connect()) as conn:
+    row = conn.execute(...).fetchone()</code></pre></div>
+  <p>單次執行的腳本看不出差別（程式結束時作業系統會回收），但<strong>你的 agent 是長時間執行的</strong>——每問一個問題洩漏一兩個連線，跑久了就會撞到檔案描述符上限，而錯誤訊息是 <code>too many open files</code>，完全看不出和資料庫有關。</p>
+  <p><strong>注意第 3 課的 Postgres 不一樣</strong>：psycopg 的 <code>with conn</code> 會提交<strong>而且會關閉</strong>連線，所以那邊不需要 <code>closing()</code>。兩個資料庫驅動的語意不同，這點要記住。</p>
 </div>
 
 <div class="box warn">

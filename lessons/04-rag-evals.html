@@ -599,13 +599,13 @@ def evaluate_retrieval(cases: list[TestCase], retriever, k: int = 5) -> dict:
 
 <div class="box danger">
   <p class="bt">Postgres 沒有內建中文斷詞</p>
-  <p>中文沒有空格，而 Postgres 預設的 parser 不會切中文詞——<strong>一整串中文會被當成一個 token</strong>。所以你沒辦法用內建的全文檢索做中文的關鍵字比對。</p>
+  <p>中文沒有空格，而 Postgres 預設的 parser 不會切中文詞——<strong>兩個標點之間的一整串中文會變成單一個 token</strong>。實測：<code>'退刷申請後，若 MerchantTradeNo 格式錯誤會回傳錯誤碼 51。'</code> 會切出 <code>'退刷申請後'</code> 和 <code>'格式錯誤會回傳錯誤碼'</code> 這種大塊，所以查「退刷」<strong>比對不到</strong>（必須整塊一字不差才行）。</p>
   <p>社群有 <code>zhparser</code>、<code>pg_jieba</code> 這類斷詞擴充，但<strong>維護狀況不佳，在較新的 Postgres 上不一定能用</strong>；<code>pg_bigm</code> 用 2-gram 方式支援亞洲語言（<code>pg_trgm</code> 預設不支援）。這些都需要另外安裝，第 3 課用的 pgvector 映像裡沒有。</p>
 </div>
 
 <div class="box tip">
   <p class="bt">但好消息是：這個專案最需要的關鍵字，剛好都是英數字</p>
-  <p>回頭看上面那張表——<strong>錯誤碼（51）、欄位名（MerchantTradeNo）、端點路徑</strong>全都是 ASCII。而 Postgres 的 parser <strong>會把夾在中文裡的英數字串正確切成獨立的 token</strong>。</p>
+  <p>回頭看上面那張表——<strong>錯誤碼（51）、欄位名（MerchantTradeNo）、端點路徑</strong>全都是 ASCII。而 Postgres 的 parser <strong>會把夾在中文裡的英數字串正確切成獨立的 token</strong>。同一句話實測的結果是 <code>'merchanttradeno'</code> 和 <code>'51'</code> 都是獨立 token，兩個都查得到。</p>
   <p>也就是說：內建全文檢索雖然切不動中文，<strong>但能精準索引到你最需要補強的那些識別字</strong>。這就足以拿到 hybrid search 的大部分價值，不用另外裝擴充。</p>
   <p>自己驗證一下再決定要不要裝擴充：</p>
 </div>

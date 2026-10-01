@@ -717,7 +717,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@v10
 
       - name: Install dependencies
         run: uv sync
@@ -738,7 +738,7 @@ jobs:
   <div class="note" data-line="3"><div class="note-n">1</div><div>推到 main 和開 PR 時觸發。<strong>PR 時跑是重點</strong>——合併前就知道有沒有壞。</div></div>
   <div class="note" data-line="11"><div class="note-n">2</div><div><code>services</code> 讓 GitHub 幫你起一個容器。<strong>這樣 CI 裡就有 Postgres + pgvector 可用</strong>，不用自己裝。</div></div>
   <div class="note" data-line="21"><div class="note-n">3</div><div><code>--health-cmd</code> 很重要：<strong>容器啟動不等於資料庫可以連</strong>。沒有健康檢查的話，你的測試會在資料庫還沒 ready 時就跑，然後隨機失敗。</div></div>
-  <div class="note" data-line="29"><div class="note-n">4</div><div>官方的 uv action，不用自己寫安裝腳本。</div></div>
+  <div class="note" data-line="29"><div class="note-n">4</div><div>官方的 uv action，不用自己寫安裝腳本。<strong>版本號會變，用之前先看一下它的 README 現在是第幾版</strong>——我寫這份教材時是 v10。更嚴謹的做法是釘在某個 commit SHA（<code>@&lt;sha&gt; # v10.1.0</code>），那也是它 README 的示範寫法，而且正好對應 OWASP 的 <code>LLM04 Supply Chain</code>：<strong>第三方 action 和你的套件一樣是供應鏈的一環</strong>。</div></div>
   <div class="note" data-line="32"><div class="note-n">5</div><div><code>uv sync</code> 照 <code>uv.lock</code> 重建環境——<strong>這就是第 1 課強調 lock 檔要進 git 的理由</strong>，CI 裝的版本和你本機完全一樣。</div></div>
   <div class="note" data-line="35"><div class="note-n">6</div><div>CI 裡要有索引才能測檢索。<strong>用一小份固定的 fixture 文件</strong>，不要在 CI 裡抓網頁——慢、不穩、而且可能違反對方的使用條款。</div></div>
   <div class="note" data-line="38"><div class="note-n">7</div><div><code>${{ secrets.X }}</code> 從 repo 的 Settings → Secrets 讀取。<strong>金鑰絕對不能寫在 workflow 檔案裡</strong>，那個檔案是公開的。</div></div>
@@ -786,7 +786,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@v10
       - run: uv sync
       - run: uv run pytest -m e2e -v
         env:
@@ -848,7 +848,7 @@ def percentiles(values: list[float]) -> dict[str, float]:
     cuts = statistics.quantiles(values, n=100)
     return {
         "p50": round(statistics.median(values), 1),
-        "p95": round(cuts[94], 1),
+        "p95": round(min(cuts[94], max(values)), 1),   # 夾住，避免外插超過最大值
         "max": round(max(values), 1),
     }</code></pre>
 </div>
@@ -856,7 +856,8 @@ def percentiles(values: list[float]) -> dict[str, float]:
 <div class="box py">
   <p class="bt"><code>statistics.quantiles(values, n=100)</code></p>
   <p>把資料切成 100 等份，回傳 <strong>99 個切點</strong>。所以索引 0 是第 1 百分位、索引 94 是第 95 百分位（0-based）。</p>
-  <p>資料點太少時百分位數沒有意義——20 個情境算 p95 等於「第二慢的那個」。<strong>這個數字要跑夠多次才可信</strong>，所以真正有用的 p95 會來自 Langfuse 累積的實際執行紀錄，而不是你的測試集。</p>
+  <p><strong>但樣本太少時它會「外插」，算出比最大值還大的 p95。</strong>例如只有兩個點 <code>[1.0, 2.0]</code>，它給的 p95 是 <code>2.9</code>——比實際觀測到的最大值還大。把這種數字寫進報告會誤導人。</p>
+  <p>所以上面的程式用 <code>min(cuts[94], max(values))</code> 夾住。更根本的問題是<strong>資料點太少時百分位數本來就沒有意義</strong>——20 個情境算 p95 等於「第二慢的那個」。真正有用的 p95 要來自 Langfuse 累積的實際執行紀錄，不是你的測試集。</p>
 </div>
 
 <h3 id="s5-bottleneck">找出瓶頸</h3>

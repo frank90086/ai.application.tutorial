@@ -581,8 +581,8 @@ def mask_card_numbers(text: str) -> str:
 <h3 id="s3-id">身分證字號：格式比對</h3>
 
 <div class="cb" data-lang="python" data-file="security/pii.py">
-<pre><code># 一個英文字母 + 9 位數字
-TW_ID = re.compile(r"\b[A-Za-z][12]\d{8}\b")
+<pre><code># 一個英文字母 + 9 位數字。第二碼：本國籍 1/2，新式外籍統一證號 8/9
+TW_ID = re.compile(r"\b[A-Za-z][1289]\d{8}\b")
 
 # 手機：09 開頭 10 碼，可能有連字號
 TW_MOBILE = re.compile(r"\b09\d{2}[- ]?\d{3}[- ]?\d{3}\b")
@@ -598,6 +598,12 @@ def mask_pii(text: str) -> str:
     text = TW_MOBILE.sub(lambda m: m.group(0)[:4] + "***" + m.group(0)[-3:], text)
     text = EMAIL.sub(lambda m: m.group(0)[0] + "***@" + m.group(0).split("@")[1], text)
     return text</code></pre>
+</div>
+
+<div class="box warn">
+  <p class="bt">第二碼為什麼是 <code>[1289]</code> 而不是 <code>[12]</code></p>
+  <p>本國籍身分證字號的第二碼是性別碼 1 或 2。但<strong>新式外籍人士統一證號的第二碼是 8 或 9</strong>——只寫 <code>[12]</code> 的話那些號碼完全不會被遮罩。</p>
+  <p>這正是「假陰性比假陽性危險」的實例：<strong>漏遮一個號碼的後果，遠大於多遮一個不該遮的字串。</strong>所以遮罩層的規則寧可寬一點。</p>
 </div>
 
 <div class="box tip">
@@ -892,17 +898,21 @@ def ask(req: AskRequest) -> AskResponse:
 <div class="cb" data-lang="text" data-file="Dockerfile">
 <pre><code>FROM python:3.12-slim
 
-# 先裝 uv
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+# 官方建議的裝法：從 uv 的 distroless 映像複製執行檔
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
 WORKDIR /app
 
+# 不裝開發相依（pytest 等）
+ENV UV_NO_DEV=1
+
 # 先複製相依檔，讓這一層可以被快取
 COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-dev
+RUN uv sync --locked --no-install-project
 
 # 再複製程式碼
 COPY . .
+RUN uv sync --locked
 
 # 不要用 root 跑
 RUN useradd -m appuser && chown -R appuser /app
@@ -923,7 +933,8 @@ CMD ["uv", "run", "uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "808
   <p class="bt">Dockerfile 的三個刻意安排</p>
   <ul>
     <li><strong>先 COPY 相依檔再 COPY 程式碼</strong>：Docker 的 layer 是逐層快取的。程式碼改動不影響相依那一層，重建時就不用重裝套件——從幾分鐘變成幾秒。</li>
-    <li><strong><code>--frozen</code></strong>：嚴格照 <code>uv.lock</code> 安裝，lock 檔和 <code>pyproject.toml</code> 不一致時直接失敗。<strong>你不會希望正式環境偷偷裝了不同的版本。</strong></li>
+    <li><strong><code>--locked</code> 而不是 <code>--frozen</code></strong>：兩個都用 <code>uv.lock</code>，但<strong>只有 <code>--locked</code> 會在 lock 檔過期（和 <code>pyproject.toml</code> 不一致）時直接失敗</strong>；<code>--frozen</code> 只在 lock 檔「不存在」時才報錯，過期的話它會照舊裝下去。<strong>正式環境要的是前者</strong>——你不會希望映像裡偷偷裝了和 lock 檔不同的版本。</li>
+    <li><strong>分兩次 <code>uv sync</code></strong>：第一次用 <code>--no-install-project</code> 只裝外部相依（這一層可以被快取），複製程式碼之後再 sync 一次把專案本身裝進去。</li>
     <li><strong><code>USER appuser</code></strong>：不要用 root 跑應用程式。容器被突破時，攻擊者拿到的權限差很多。</li>
   </ul>
 </div>

@@ -507,6 +507,13 @@ def connect() -> psycopg.Connection:
     return conn</code></pre>
 </div>
 
+<div class="box warn">
+  <p class="bt">psycopg 的 <code>with conn</code> 和第 2 課的 sqlite3 <strong>不一樣</strong></p>
+  <p>第 2 課用 sqlite3 時要加 <code>closing()</code>，因為它的 <code>with conn</code> 只提交、不關連線。<strong>psycopg 不同——它的 <code>with conn</code> 會提交交易<u>而且會關閉連線</u></strong>（發生例外時則回滾後關閉）。</p>
+  <p>所以本課寫 <code>with connect() as conn:</code> 就夠了，不需要 <code>closing()</code>。<strong>兩個驅動的語意不同，不要把第 2 課的習慣直接搬過來</strong>（反過來也一樣，sqlite3 少了 <code>closing()</code> 會洩漏連線）。</p>
+  <p>另外因為離開區塊就會提交，程式碼裡的 <code>conn.commit()</code> 其實是多餘的——留著只是為了讓意圖明顯。</p>
+</div>
+
 <div class="box danger">
   <p class="bt">忘記 <code>register_vector(conn)</code> 的症狀</p>
   <p>插入時 psycopg 不知道怎麼把 Python 的 list 轉成 <code>vector</code>，會報型別錯誤；查詢時回來的向量會變成一長串字串而不是數值陣列。<strong>這兩種錯誤訊息都不會提到 <code>register_vector</code></strong>，所以先記住它。</p>
@@ -651,13 +658,16 @@ def embed_query(text: str) -> list[float]:
     while start < len(text):
         end = start + size
         chunks.append(text[start:end])
+        if end >= len(text):           # 已經切到結尾，不要再往下走
+            break
         start = end - overlap          # 往回退一點，製造重疊
     return chunks</code></pre>
 </div>
 
 <div class="box py">
   <p class="bt"><code>text[start:end]</code> 是切片（slicing）</p>
-  <p>Python 的切片取「從 start 到 end 之前」的子字串，<strong>不包含 end</strong>。而且切片<strong>不會越界報錯</strong>——<code>text[0:999999]</code> 在只有 100 個字的字串上會安靜地回傳整個字串。這個特性讓上面的迴圈不需要特別處理最後一塊。</p>
+  <p>Python 的切片取「從 start 到 end 之前」的子字串，<strong>不包含 end</strong>。而且切片<strong>不會越界報錯</strong>——<code>text[0:999999]</code> 在只有 100 個字的字串上會安靜地回傳整個字串。</p>
+  <p><strong>那個 <code>if end >= len(text): break</code> 是必要的</strong>，少了它會多產生一塊純粹重複的尾巴。例如 500 字的文字用 size=500、overlap=80 去切，會得到第二塊「最後 80 字」——那 80 字完全包含在第一塊裡，不但浪費一次 embedding 的錢，還會在檢索結果裡佔掉一個名額。<strong>這種「不會報錯但默默變差」的 bug 正是要靠第 4 課的量化評估才抓得到。</strong></p>
 </div>
 
 <h4>overlap 是做什麼的</h4>
