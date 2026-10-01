@@ -373,7 +373,6 @@ Service References/*/!Reference.cs
 build-Debug-unix.sh
 build-Debug-windows.bat
 build-Release-unix.sh
-docker-compose.yml
 .sonarqube/
 vol/
 

@@ -48,7 +48,7 @@ W1 的 `llm-basics` 是獨立練習 repo；W2 起的成果都疊在這個 repo �
 
 `.gitignore` 是 Visual Studio 的模板（repo 原本是 .NET 專案的殼），尾端已補上 Python / uv 與機密檔案的規則：`.venv/`、`.env`、`.env.*`（但保留 `.env.example`）、`.pytest_cache/`、`.ruff_cache/`。
 
-**還有一個繼承來的陷阱**：第 376 行的 `docker-compose.yml` 會讓 compose 檔被靜默忽略。W3（Postgres + pgvector）和 W6（Langfuse）都需要把 compose 檔提交進 repo，動到那一步時要先刪掉這條規則，或改用 `compose.yaml` 這個檔名。
+原本模板裡還有一條 `docker-compose.yml`（會讓 compose 檔被靜默忽略），已經刪掉——W3 的 pgvector 與 W6 的 Langfuse 都需要把 compose 檔提交進 repo。新建 compose 檔時建議用 `compose.yaml`，那是 Docker Compose v2 的官方建議檔名。
 
 ## 課程教材（lessons/）
 

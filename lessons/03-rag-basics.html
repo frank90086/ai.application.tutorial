@@ -422,7 +422,8 @@ volumes:
 
 <div class="box warn">
   <p class="bt">檔名用 compose.yaml，不要用 docker-compose.yml</p>
-  <p>兩個理由。第一，<code>compose.yaml</code> 是 Docker Compose v2 的官方建議檔名。第二，<strong>這個 repo 的 <code>.gitignore</code> 繼承自一個 Visual Studio 模板，裡面有一條 <code>docker-compose.yml</code></strong>——用那個檔名的話，你 <code>git add</code> 會被靜默忽略，沒有任何錯誤訊息。</p>
+  <p><code>compose.yaml</code> 是 Docker Compose v2 的官方建議檔名，新專案用它就好。</p>
+  <p>另外提醒一個<strong>一般性的坑</strong>：很多從舊模板繼承來的 <code>.gitignore</code>（尤其是 .NET / Visual Studio 的）裡面有一條 <code>docker-compose.yml</code>。如果你的專案剛好是這種情況，<code>git add</code> 那個檔案會被<strong>靜默忽略、沒有任何錯誤訊息</strong>。遇到「檔案明明在但 git 看不到」時，先用 <code>git check-ignore -v 檔名</code> 查是哪一條規則擋住的。</p>
 </div>
 
 <div class="cb" data-lang="bash" data-file="終端機">
